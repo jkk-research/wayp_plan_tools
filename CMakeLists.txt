@@ -37,6 +37,13 @@ set(ament_dependencies
 
 add_executable(waypoint_saver src/waypoint_saver.cpp)
 ament_target_dependencies(waypoint_saver  ${ament_dependencies} )
+add_executable(waypoint_loader src/waypoint_loader.cpp)
+ament_target_dependencies(waypoint_loader  ${ament_dependencies} )
+add_executable(single_goal_pursuit src/single_goal_pursuit.cpp)
+ament_target_dependencies(single_goal_pursuit  ${ament_dependencies} )
+add_executable(multiple_goal_pursuit src/multiple_goal_pursuit.cpp)
+ament_target_dependencies(multiple_goal_pursuit  ${ament_dependencies} )
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -54,5 +61,8 @@ install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
 install(TARGETS
   waypoint_saver
+  waypoint_loader
+  single_goal_pursuit
+  multiple_goal_pursuit
   DESTINATION lib/${PROJECT_NAME})
 ament_package()

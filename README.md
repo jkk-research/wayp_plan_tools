@@ -6,8 +6,8 @@ Planner / control nodes:
 - `multiple_goal_pursuit`: Multiple goal pursuit for vehicles an implementation of our [paper](https://hjic.mk.uni-pannon.hu/index.php/hjic/article/view/914)
 
 Waypoint nodes:
-- `waypoint_saver`: saves the waypoint to a csv
-- `waypoint_loader`: loads the waypoint from a csv to a ROS 2 topic
+- `waypoint_saver`: saves the waypoints to a csv
+- `waypoint_loader`: loads the waypoints from a csv to a ROS 2 topic
 
 
 ## Build
@@ -51,3 +51,5 @@ If you use any of this code please consider citing the [paper](https://hjic.mk.u
     pages={11–17} 
 }
 ```
+
+![](csv/rviz2waypoint01.png)

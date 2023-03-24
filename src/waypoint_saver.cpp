@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Based on Autoware waypoint saver
+// Based on Autoware waypoint saver, but here no Autoware message is used
 
 #include <chrono>
 #include <functional>
@@ -76,11 +76,10 @@ int main(int argc, char **argv)
     if(file_name.empty()){
         file_name = "waypoint01.csv";  
     }
-    RCLCPP_INFO_STREAM(node->get_logger(), "Save to " << file_name << " ");
-    std::ofstream ofs(file_name.c_str(), std::ios::app);
-    ofs << "x,y,z,yaw,velocity,change_flag" << std::endl;
-    //ofs << std::fixed << std::setprecision(4) << current_pose.position.x << "," << current_pose.position.y << ","  << current_pose.position.z << "," << tf::getYaw(current_pose.orientation) << ",0,0" << std::endl;
-    ofs << std::fixed << std::setprecision(4) << 12.1 << "," << 22.3 << "," << 44.2 << "," << 12.2 << ",0,0" << std::endl;
+    RCLCPP_INFO_STREAM(node->get_logger(), "Save to " << file_dir << "/" << file_name << " ");
+    std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
+    // mps = m/s metre per second ROS 2 standard SI unit for velocity
+    ofs << "x,y,z,yaw,mps,change_flag" << std::endl;
     while (rclcpp::ok())
     {
         rclcpp::spin_some(node);
