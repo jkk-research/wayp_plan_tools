@@ -196,7 +196,7 @@ void pubLaneWaypoint(const std::string &file_path)
     visualization_msgs::msg::Marker mark_elem;
     mark_elem.header.frame_id = "/map";
     mark_elem.header.stamp = node->now();
-    mark_elem.ns = "basic_shapes";
+    mark_elem.ns = "waypoints";
     mark_elem.id = id; 
     mark_elem.scale.x = 1.0; mark_elem.scale.y = 0.4; mark_elem.scale.z = 0.6;
     mark_elem.color = getColor(speeds[id]);

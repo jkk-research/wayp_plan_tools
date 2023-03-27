@@ -39,6 +39,8 @@ add_executable(waypoint_saver src/waypoint_saver.cpp)
 ament_target_dependencies(waypoint_saver  ${ament_dependencies} )
 add_executable(waypoint_loader src/waypoint_loader.cpp)
 ament_target_dependencies(waypoint_loader  ${ament_dependencies} )
+add_executable(waypoint_to_target src/waypoint_to_target.cpp)
+ament_target_dependencies(waypoint_to_target  ${ament_dependencies} )
 add_executable(single_goal_pursuit src/single_goal_pursuit.cpp)
 ament_target_dependencies(single_goal_pursuit  ${ament_dependencies} )
 add_executable(multiple_goal_pursuit src/multiple_goal_pursuit.cpp)
@@ -62,6 +64,7 @@ install(DIRECTORY launch
 install(TARGETS
   waypoint_saver
   waypoint_loader
+  waypoint_to_target
   single_goal_pursuit
   multiple_goal_pursuit
   DESTINATION lib/${PROJECT_NAME})
