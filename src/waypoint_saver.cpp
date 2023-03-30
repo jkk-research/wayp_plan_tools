@@ -33,124 +33,134 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_ros/buffer.h"
+#include "tf2/exceptions.h"
 
+using namespace std::chrono_literals;
+using std::placeholders::_1;
 
-rclcpp::Node::SharedPtr node;
-std::string file_dir, file_name;
-double interval_ = 0.4;
-geometry_msgs::msg::Pose previous_pose;
-geometry_msgs::msg::Pose current_tf;
-bool topic_based_saving; // topic or transform (tf) based saving
-
-void poseCurrentCallback(const geometry_msgs::msg::PoseStamped &current_pose)
+geometry_msgs::msg::Pose previous_pose; // TODO: remove global variable
+class WaypointSaver : public rclcpp::Node
 {
-    RCLCPP_INFO_STREAM(node->get_logger(), "X : " << current_pose.pose.position.x);
-    /*
-    double distance = sqrt(pow((current_pose.position.x - previous_pose.position.x), 2) +
-                           pow((current_pose.position.y - previous_pose.position.y), 2));
+    std::string file_dir, file_name;
+    double interval_ = 0.4;
+    geometry_msgs::msg::Pose current_tf;
+    bool topic_based_saving; // topic or transform (tf) based saving
 
-    std::ofstream ofs(file_name.c_str(), std::ios::app);
-    tf2::Quaternion q(
-        current_pose.orientation.x,
-        current_pose.orientation.y,
-        current_pose.orientation.z,
-        current_pose.orientation.w);
-    tf2::Matrix3x3 m(q);
-    double roll, pitch, yaw;
-    m.getRPY(roll, pitch, yaw);
-
-    // if car moves [interval] meter
-    if (distance > interval_)
+public:
+    WaypointSaver() : Node("waypoint_saver_node")
     {
-        RCLCPP_INFO_STREAM(node->get_logger(), "X Y yaw: " << current_pose.position.x << " " << current_pose.position.y << " " << yaw);
-        ofs << std::fixed << std::setprecision(4) << current_pose.position.x << "," << current_pose.position.y << ","  << current_pose.position.z << "," << yaw << ",0,0" << std::endl;
-        previous_pose = current_pose;
-    }
-    */
-}
-
-// get tf2 transform from map to lexus3/base_link
-void getTransform()
-{
-    tf2_ros::Buffer tfBuffer(node->get_clock());
-    tf2_ros::TransformListener tfListener(tfBuffer);
-    geometry_msgs::msg::TransformStamped transformStamped;
-    try
-    {
-        transformStamped = tfBuffer.lookupTransform("map", "lexus3/base_link", rclcpp::Time(0));
-    }
-    catch (tf2::TransformException &ex)
-    {
-        RCLCPP_WARN(node->get_logger(), "Could not get transform: %s", ex.what());
-    }
-    current_tf.position.x = transformStamped.transform.translation.x;
-    current_tf.position.y = transformStamped.transform.translation.y;
-    current_tf.position.z = transformStamped.transform.translation.z;
-    current_tf.orientation.x = transformStamped.transform.rotation.x;
-    current_tf.orientation.y = transformStamped.transform.rotation.y;
-    current_tf.orientation.z = transformStamped.transform.rotation.z;
-    current_tf.orientation.w = transformStamped.transform.rotation.w;
-
-
-    double distance = sqrt(pow((current_tf.position.x - previous_pose.position.x), 2) +
-                           pow((current_tf.position.y - previous_pose.position.y), 2));
-
-    std::ofstream ofs(file_name.c_str(), std::ios::app);
-    tf2::Quaternion q(
-        current_tf.orientation.x,
-        current_tf.orientation.y,
-        current_tf.orientation.z,
-        current_tf.orientation.w);
-    tf2::Matrix3x3 m(q);
-    double roll, pitch, yaw;
-    m.getRPY(roll, pitch, yaw);
-
-    RCLCPP_INFO_STREAM(node->get_logger(), "X Y yaw: " << current_tf.position.x << " " << current_tf.position.y << " " << yaw);
-    
-    // if car moves [interval] meter
-    if (distance > interval_)
-    {
-        RCLCPP_INFO_STREAM(node->get_logger(), "X Y yaw: " << current_tf.position.x << " " << current_tf.position.y << " " << yaw);
-        ofs << std::fixed << std::setprecision(4) << current_tf.position.x << "," << current_tf.position.y << ","  << current_tf.position.z << "," << yaw << ",0,0" << std::endl;
-        previous_pose = current_tf;
+        this->declare_parameter<std::string>("file_dir", "");
+        this->declare_parameter<std::string>("file_name", "");
+        this->declare_parameter<std::string>("pose_topic", "");
+        this->get_parameter("file_dir", file_dir);
+        this->get_parameter("file_name", file_name);
+        tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+        if (file_name.empty())
+        {
+            file_name = "waypoint01.csv";
+        }
+        std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
+        // mps = m/s metre per second ROS 2 standard SI unit for velocity
+        ofs << "x,y,z,yaw,mps,change_flag" << std::endl;
+        topic_based_saving = false; // set (TODO: param)
+        if (topic_based_saving)
+        {
+            RCLCPP_INFO_STREAM(this->get_logger(), "Save to " << file_dir << "/" << file_name << " source: pose topic");
+            sub_current_pose_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("/current_pose", 10, std::bind(&WaypointSaver::poseCurrentCallback, this, _1));
+        }
+        else
+        {
+            RCLCPP_INFO_STREAM(this->get_logger(), "Save to " << file_dir << "/" << file_name << " source: tf");
+            // Call on_timer function every second
+            timer_ = this->create_wall_timer(std::chrono::milliseconds(1000), std::bind(&WaypointSaver::getTransform, this));
+        }
     }
 
+private:
+    void poseCurrentCallback(const geometry_msgs::msg::PoseStamped &current_pose) const
+    {
+        // RCLCPP_INFO_STREAM(this->get_logger(), "X : " << current_pose.pose.position.x);
+        double distance = sqrt(pow((current_pose.pose.position.x - previous_pose.position.x), 2) +
+                               pow((current_pose.pose.position.y - previous_pose.position.y), 2));
 
-}
+        std::ofstream ofs(file_name.c_str(), std::ios::app);
+        tf2::Quaternion q(
+            current_pose.pose.orientation.x,
+            current_pose.pose.orientation.y,
+            current_pose.pose.orientation.z,
+            current_pose.pose.orientation.w);
+        tf2::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getRPY(roll, pitch, yaw);
 
+        // if car moves [interval] meter
+        if (distance > interval_)
+        {
+            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << current_pose.pose.position.x << " " << current_pose.pose.position.y << " " << yaw);
+            ofs << std::fixed << std::setprecision(4) << current_pose.pose.position.x << "," << current_pose.pose.position.y << "," << current_pose.pose.position.z << "," << yaw << ",0,0" << std::endl;
+            // update previous pose from values of current pose
+            previous_pose = current_pose.pose;
+        }
+    }
+    // get tf2 transform from map to lexus3/base_link
+    void getTransform()
+    {
+        tf2_ros::Buffer tfBuffer(this->get_clock());
+        tf2_ros::TransformListener tfListener(tfBuffer);
+        geometry_msgs::msg::TransformStamped transformStamped;
+        geometry_msgs::msg::TransformStamped t;
+        try
+        {
+            transformStamped = tf_buffer_->lookupTransform("map", "lexus3/base_link", tf2::TimePointZero); 
+        }
+        catch (const tf2::TransformException &ex)
+        {
+            RCLCPP_WARN(this->get_logger(), "Could not get transform: %s", ex.what());
+            return;
+        }
+        current_tf.position.x = transformStamped.transform.translation.x;
+        current_tf.position.y = transformStamped.transform.translation.y;
+        current_tf.position.z = transformStamped.transform.translation.z;
+        current_tf.orientation.x = transformStamped.transform.rotation.x;
+        current_tf.orientation.y = transformStamped.transform.rotation.y;
+        current_tf.orientation.z = transformStamped.transform.rotation.z;
+        current_tf.orientation.w = transformStamped.transform.rotation.w;
 
-int main(int argc, char **argv)
+        double distance = sqrt(pow((current_tf.position.x - previous_pose.position.x), 2) +
+                               pow((current_tf.position.y - previous_pose.position.y), 2));
+
+        std::ofstream ofs(file_name.c_str(), std::ios::app);
+        tf2::Quaternion q(
+            current_tf.orientation.x,
+            current_tf.orientation.y,
+            current_tf.orientation.z,
+            current_tf.orientation.w);
+        tf2::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getRPY(roll, pitch, yaw);
+
+        // RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << current_tf.position.x << " " << current_tf.position.y << " " << yaw);
+
+        // if car moves [interval] meters
+        if (distance > interval_)
+        {
+            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << current_tf.position.x << " " << current_tf.position.y << " " << yaw);
+            ofs << std::fixed << std::setprecision(4) << current_tf.position.x << "," << current_tf.position.y << "," << current_tf.position.z << "," << yaw << ",0,0" << std::endl;
+            previous_pose = current_tf;
+        }
+    }
+
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_current_pose_;
+    rclcpp::TimerBase::SharedPtr timer_{nullptr};
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+};
+
+int main(int argc, char *argv[])
 {
     rclcpp::init(argc, argv);
-    node = rclcpp::Node::make_shared("waypoint_saver_node");
-
-    node->declare_parameter<std::string>("file_dir", "");
-    node->declare_parameter<std::string>("file_name", "");
-    node->declare_parameter<std::string>("pose_topic", "");
-    node->get_parameter("file_dir", file_dir);
-    node->get_parameter("file_name", file_name);
-
-    if(file_name.empty()){
-        file_name = "waypoint01.csv";  
-    }
-    std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
-    // mps = m/s metre per second ROS 2 standard SI unit for velocity
-    ofs << "x,y,z,yaw,mps,change_flag" << std::endl;
-    topic_based_saving = true; // set (TODO: param)
-    if(topic_based_saving){
-        RCLCPP_INFO_STREAM(node->get_logger(), "Save to " << file_dir << "/" << file_name << " source: pose topic");
-        auto sub_current_pose = node->create_subscription<geometry_msgs::msg::PoseStamped>("/current_pose", 10, poseCurrentCallback);
-    }
-    else{
-        RCLCPP_INFO_STREAM(node->get_logger(), "Save to " << file_dir << "/" << file_name << " source: tf");
-        // Call on_timer function every second
-        auto timer_ = node->create_wall_timer(std::chrono::milliseconds(1000), getTransform);
-    }
-    while (rclcpp::ok())
-    {
-        rclcpp::spin_some(node);
-    }
+    rclcpp::spin(std::make_shared<WaypointSaver>());
     rclcpp::shutdown();
-
-  return 0;
+    return 0;
 }
