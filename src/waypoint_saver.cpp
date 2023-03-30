@@ -23,6 +23,7 @@
 #include <fstream>
 
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/float32.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -39,12 +40,9 @@ using namespace std::chrono_literals;
 using std::placeholders::_1;
 
 geometry_msgs::msg::Pose previous_pose; // TODO: remove global variable
+float speed_mps = -1.0;
 class WaypointSaver : public rclcpp::Node
 {
-    std::string file_dir, file_name;
-    double interval_ = 0.4;
-    geometry_msgs::msg::Pose current_tf;
-    bool topic_based_saving; // topic or transform (tf) based saving
 
 public:
     WaypointSaver() : Node("waypoint_saver_node")
@@ -75,16 +73,24 @@ public:
             // Call on_timer function every second
             timer_ = this->create_wall_timer(std::chrono::milliseconds(1000), std::bind(&WaypointSaver::getTransform, this));
         }
+        sub_vehicle_speed_ = this->create_subscription<std_msgs::msg::Float32>("lexus3/vehicle_speed_kmph", 10, std::bind(&WaypointSaver::vehicleSpeedCallback, this, _1));
     }
 
 private:
+
+    void vehicleSpeedCallback(const std_msgs::msg::Float32 msg) const
+    {
+        speed_mps = msg.data / 3.6;
+        //RCLCPP_INFO_STREAM(this->get_logger(), "Speed: " << msg.data << " km/h");
+    }
+
     void poseCurrentCallback(const geometry_msgs::msg::PoseStamped &current_pose) const
     {
         // RCLCPP_INFO_STREAM(this->get_logger(), "X : " << current_pose.pose.position.x);
         double distance = sqrt(pow((current_pose.pose.position.x - previous_pose.position.x), 2) +
                                pow((current_pose.pose.position.y - previous_pose.position.y), 2));
 
-        std::ofstream ofs(file_name.c_str(), std::ios::app);
+        std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
         tf2::Quaternion q(
             current_pose.pose.orientation.x,
             current_pose.pose.orientation.y,
@@ -98,7 +104,7 @@ private:
         if (distance > interval_)
         {
             RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << current_pose.pose.position.x << " " << current_pose.pose.position.y << " " << yaw);
-            ofs << std::fixed << std::setprecision(4) << current_pose.pose.position.x << "," << current_pose.pose.position.y << "," << current_pose.pose.position.z << "," << yaw << ",0,0" << std::endl;
+            ofs << std::fixed << std::setprecision(4) << current_pose.pose.position.x << "," << current_pose.pose.position.y << "," << current_pose.pose.position.z << "," << yaw << "," << speed_mps << ",0" << std::endl;
             // update previous pose from values of current pose
             previous_pose = current_pose.pose;
         }
@@ -106,6 +112,7 @@ private:
     // get tf2 transform from map to lexus3/base_link
     void getTransform()
     {
+        RCLCPP_INFO_STREAM(this->get_logger(), "Speed: " << speed_mps << " m/s");
         tf2_ros::Buffer tfBuffer(this->get_clock());
         tf2_ros::TransformListener tfListener(tfBuffer);
         geometry_msgs::msg::TransformStamped transformStamped;
@@ -130,7 +137,7 @@ private:
         double distance = sqrt(pow((current_tf.position.x - previous_pose.position.x), 2) +
                                pow((current_tf.position.y - previous_pose.position.y), 2));
 
-        std::ofstream ofs(file_name.c_str(), std::ios::app);
+        std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
         tf2::Quaternion q(
             current_tf.orientation.x,
             current_tf.orientation.y,
@@ -145,16 +152,21 @@ private:
         // if car moves [interval] meters
         if (distance > interval_)
         {
-            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << current_tf.position.x << " " << current_tf.position.y << " " << yaw);
-            ofs << std::fixed << std::setprecision(4) << current_tf.position.x << "," << current_tf.position.y << "," << current_tf.position.z << "," << yaw << ",0,0" << std::endl;
+            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << current_tf.position.x << " " << current_tf.position.y << " " << yaw << " "<< file_name.c_str());
+            ofs << std::fixed << std::setprecision(4) << current_tf.position.x << "," << current_tf.position.y << "," << current_tf.position.z << "," << yaw << "," << speed_mps << ",0" << std::endl;
             previous_pose = current_tf;
         }
     }
 
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_current_pose_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_vehicle_speed_;
     rclcpp::TimerBase::SharedPtr timer_{nullptr};
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::string file_dir, file_name;
+    double interval_ = 0.4;
+    geometry_msgs::msg::Pose current_tf;
+    bool topic_based_saving; // topic or transform (tf) based saving    
 };
 
 int main(int argc, char *argv[])
