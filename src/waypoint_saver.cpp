@@ -39,14 +39,14 @@
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 
-geometry_msgs::msg::Pose previous_pose; // TODO: remove global variable
-float speed_mps = -1.0;
 class WaypointSaver : public rclcpp::Node
 {
-
+    geometry_msgs::msg::Pose previous_pose;
+    float speed_mps;
 public:
     WaypointSaver() : Node("waypoint_saver_node")
     {
+        speed_mps = -1.0;
         this->declare_parameter<std::string>("file_dir", "");
         this->declare_parameter<std::string>("file_name", "");
         this->declare_parameter<std::string>("pose_topic", "");
@@ -78,13 +78,13 @@ public:
 
 private:
 
-    void vehicleSpeedCallback(const std_msgs::msg::Float32 msg) const
+    void vehicleSpeedCallback(const std_msgs::msg::Float32 msg) 
     {
         speed_mps = msg.data / 3.6;
         //RCLCPP_INFO_STREAM(this->get_logger(), "Speed: " << msg.data << " km/h");
     }
 
-    void poseCurrentCallback(const geometry_msgs::msg::PoseStamped &current_pose) const
+    void poseCurrentCallback(const geometry_msgs::msg::PoseStamped &current_pose)
     {
         // RCLCPP_INFO_STREAM(this->get_logger(), "X : " << current_pose.pose.position.x);
         double distance = sqrt(pow((current_pose.pose.position.x - previous_pose.position.x), 2) +
@@ -112,7 +112,7 @@ private:
     // get tf2 transform from map to lexus3/base_link
     void getTransform()
     {
-        RCLCPP_INFO_STREAM(this->get_logger(), "Speed: " << speed_mps << " m/s");
+        //RCLCPP_INFO_STREAM(this->get_logger(), "Speed: " << speed_mps << " m/s");
         tf2_ros::Buffer tfBuffer(this->get_clock());
         tf2_ros::TransformListener tfListener(tfBuffer);
         geometry_msgs::msg::TransformStamped transformStamped;
@@ -152,9 +152,13 @@ private:
         // if car moves [interval] meters
         if (distance > interval_)
         {
-            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << current_tf.position.x << " " << current_tf.position.y << " " << yaw << " "<< file_name.c_str());
+            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw speed: " << std::setprecision(2) << current_tf.position.x << " " << current_tf.position.y << " " << yaw << " " << speed_mps << " "<< file_name.c_str());
             ofs << std::fixed << std::setprecision(4) << current_tf.position.x << "," << current_tf.position.y << "," << current_tf.position.z << "," << yaw << "," << speed_mps << ",0" << std::endl;
             previous_pose = current_tf;
+            if (speed_mps < -0.01)
+            {
+                RCLCPP_WARN_STREAM(this->get_logger(), "Speed is less than 0");
+            }
         }
     }
 
