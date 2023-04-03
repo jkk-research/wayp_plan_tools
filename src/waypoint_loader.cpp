@@ -226,9 +226,15 @@ private:
     RCLCPP_DEBUG_STREAM(this->get_logger(), "lane data is valid. publishing...");
     std::vector<geometry_msgs::msg::Pose> wps;
     std::vector<float> speeds;
+    std_msgs::msg::Float32MultiArray speed_array;
     geometry_msgs::msg::PoseArray wp_array;
     visualization_msgs::msg::MarkerArray mark_array;
     loadWaypointsForVer3(file_path.c_str(), &wps, &speeds);
+    // load speeds to speed_array
+    for (std::vector<float>::iterator it = speeds.begin(); it != speeds.end(); ++it)
+    {
+      speed_array.data.push_back(*it);
+    }
     int id = 0;
     for (std::vector<geometry_msgs::msg::Pose>::iterator it = wps.begin(); it != wps.end(); ++it)
     {
@@ -273,6 +279,7 @@ private:
       id++;
     }
     lane_pub_->publish(wp_array);
+    speed_pub_->publish(speed_array);
     mark_pub_->publish(mark_array);
   }
 

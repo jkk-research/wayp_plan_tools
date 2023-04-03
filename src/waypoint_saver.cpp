@@ -70,8 +70,8 @@ public:
         else
         {
             RCLCPP_INFO_STREAM(this->get_logger(), "Save to " << file_dir << "/" << file_name << " source: tf");
-            // Call on_timer function every second
-            timer_ = this->create_wall_timer(std::chrono::milliseconds(1000), std::bind(&WaypointSaver::getTransform, this));
+            // Call on_timer function every 100 milliseconds
+            timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&WaypointSaver::getTransform, this));
         }
         sub_vehicle_speed_ = this->create_subscription<std_msgs::msg::Float32>("lexus3/vehicle_speed_kmph", 10, std::bind(&WaypointSaver::vehicleSpeedCallback, this, _1));
     }
@@ -101,9 +101,10 @@ private:
         m.getRPY(roll, pitch, yaw);
 
         // if car moves [interval] meter
-        if (distance > interval_)
+        if (distance >= interval_)
         {
-            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << current_pose.pose.position.x << " " << current_pose.pose.position.y << " " << yaw);
+            //RCLCPP_INFO_STREAM(this->get_logger(), "distance: " << std::fixed << std::setprecision(2) << distance);
+            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << std::fixed << std::setprecision(2) << current_pose.pose.position.x << " " << current_pose.pose.position.y << " " << yaw);
             ofs << std::fixed << std::setprecision(4) << current_pose.pose.position.x << "," << current_pose.pose.position.y << "," << current_pose.pose.position.z << "," << yaw << "," << speed_mps << ",0" << std::endl;
             // update previous pose from values of current pose
             previous_pose = current_pose.pose;
@@ -152,7 +153,8 @@ private:
         // if car moves [interval] meters
         if (distance > interval_)
         {
-            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw speed: " << std::setprecision(2) << current_tf.position.x << " " << current_tf.position.y << " " << yaw << " " << speed_mps << " "<< file_name.c_str());
+            //RCLCPP_INFO_STREAM(this->get_logger(), "distance: " << std::fixed << std::setprecision(2) << distance);
+            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw speed: " << std::fixed << std::setprecision(2) << current_tf.position.x << " " << current_tf.position.y << " " << yaw << " " << speed_mps << " "<< file_name.c_str());
             ofs << std::fixed << std::setprecision(4) << current_tf.position.x << "," << current_tf.position.y << "," << current_tf.position.z << "," << yaw << "," << speed_mps << ",0" << std::endl;
             previous_pose = current_tf;
             if (speed_mps < -0.01)

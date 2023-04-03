@@ -21,120 +21,166 @@
 #include "tf2_ros/transform_listener.h"
 #include "tf2_ros/buffer.h"
 
-rclcpp::Node::SharedPtr node;
-int already_visited_waypoint = 0;
-rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr speed_pub_;
-rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_pub_;
+using namespace std::chrono_literals;
+using std::placeholders::_1;
 
-// parameters
-std::string waypoint_topic = "/lexus3/waypointarray";
-int lookahead_distance = 3.5;
-geometry_msgs::msg::Pose current_pose;
-
-
-double distanceFromWayPoint(const geometry_msgs::msg::Pose &waypoint, const geometry_msgs::msg::Pose &pose_curr)
+class WaypointToTarget : public rclcpp::Node
 {
-    double dx = waypoint.position.x - pose_curr.position.x;
-    double dy = waypoint.position.y - pose_curr.position.y;
-    return sqrt(dx * dx + dy * dy);
-}
-
-void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
-{
-    visualization_msgs::msg::Marker pursuit_goal;
-    pursuit_goal.header.frame_id = "/map";
-    pursuit_goal.header.stamp = node->now();
-    pursuit_goal.ns = "pursuit_goal";
-    pursuit_goal.id = 0;
-    pursuit_goal.scale.x = 1.2;
-    pursuit_goal.scale.y = 0.6;
-    pursuit_goal.scale.z = 0.8;
-    // https://github.com/jkk-research/colors
-    // md_amber_500 -- 1.00 0.76 0.03
-    pursuit_goal.color.r = 1.00;
-    pursuit_goal.color.g = 0.76;
-    pursuit_goal.color.b = 0.03;
-    pursuit_goal.color.a = 1.0;
-    pursuit_goal.type = visualization_msgs::msg::Marker::CYLINDER;
-    pursuit_goal.action = visualization_msgs::msg::Marker::MODIFY;
-
-    // choose waypoint(s) closest to lookahead distance
-    int closest_waypoint = already_visited_waypoint;
-    // get the first waypoint which is at least lookahead_distance away from current pose
-    for (int i = already_visited_waypoint; i < int(msg.poses.size()); i++)
+public:
+    WaypointToTarget() : Node("waypoint_to_target_node")
     {
-        //RCLCPP_INFO_STREAM(node->get_logger(), "distanceFromWayPoint: " << distanceFromWayPoint(msg.poses[i], current_pose));
-        if (distanceFromWayPoint(msg.poses[i], current_pose) < lookahead_distance)
+        tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+        // Call timer_callback function every second
+        timer_ = this->create_wall_timer(std::chrono::milliseconds(1000), std::bind(&WaypointToTarget::timer_callback, this));
+
+        this->declare_parameter<std::string>("waypoint_topic", "");
+        // this->get_parameter("waypoint_topic", waypoint_topic);
+
+        goal_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("lexus3/pursuitgoal", 10);
+        speed_pub_ = this->create_publisher<std_msgs::msg::Float32>("lexus3/pursuitspeedtarget", 10);
+
+        sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&WaypointToTarget::waypointCallback, this, _1));
+        sub_s_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("lexus3/waypointarray_speeds", 10, std::bind(&WaypointToTarget::speedCallback, this, _1));
+        RCLCPP_INFO_STREAM(this->get_logger(), "waypoint_to_target node started");
+    }
+
+private:
+    double distanceFromWayPoint(const geometry_msgs::msg::Pose &waypoint, const geometry_msgs::msg::Pose &pose_curr)
+    {
+        double dx = waypoint.position.x - pose_curr.position.x;
+        double dy = waypoint.position.y - pose_curr.position.y;
+        return sqrt(dx * dx + dy * dy);
+    }
+
+    void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
+    {
+        visualization_msgs::msg::Marker pursuit_goal;
+        pursuit_goal.header.frame_id = "/map";
+        pursuit_goal.header.stamp = this->now();
+        pursuit_goal.ns = "pursuit_goal";
+        pursuit_goal.id = 0;
+        pursuit_goal.scale.x = 1.2;
+        pursuit_goal.scale.y = 0.6;
+        pursuit_goal.scale.z = 0.8;
+        // https://github.com/jkk-research/colors
+        // md_amber_500 -- 1.00 0.76 0.03
+        pursuit_goal.color.r = 1.00;
+        pursuit_goal.color.g = 0.76;
+        pursuit_goal.color.b = 0.03;
+        pursuit_goal.color.a = 1.0;
+        pursuit_goal.type = visualization_msgs::msg::Marker::CYLINDER;
+        pursuit_goal.action = visualization_msgs::msg::Marker::MODIFY;
+
+        // choose waypoint(s) closest to lookahead distance
+        int closest_waypoint = already_visited_waypoint;
+        // get the first waypoint which is at least lookahead_distance_min away from current pose
+        for (int i = already_visited_waypoint; i <= int(msg.poses.size()); i++)
         {
-            closest_waypoint = i;
-            break;
+            // RCLCPP_INFO_STREAM(this->get_logger(), "distanceFromWayPoint: " << distanceFromWayPoint(msg.poses[i], current_pose));
+            if (distanceFromWayPoint(msg.poses[i], current_pose) > lookahead_distance_min)
+            {
+                if (distanceFromWayPoint(msg.poses[i], current_pose) < lookahead_distance_max)
+                {
+                    closest_waypoint = i;
+                }
+                break;
+            }
         }
-    } 
-    // if the lookahead distance further away than 20 meters
-    if (distanceFromWayPoint(msg.poses[closest_waypoint], current_pose) > 20.0){
-        RCLCPP_WARN_STREAM(node->get_logger(), "Closest waypoint is " << distanceFromWayPoint(msg.poses[closest_waypoint], current_pose) << " m away");
+        RCLCPP_INFO_STREAM(this->get_logger(), "Closest waypoint[" << closest_waypoint << "] " << std::fixed << std::setprecision(1) << distanceFromWayPoint(msg.poses[closest_waypoint], current_pose) << " m away");
+        // if the lookahead distance far away
+        if (distanceFromWayPoint(msg.poses[closest_waypoint], current_pose) > (lookahead_distance_max + 2.0))
+        {
+            RCLCPP_WARN_STREAM(this->get_logger(), "Closest waypoint is " << std::fixed << std::setprecision(1) << distanceFromWayPoint(msg.poses[closest_waypoint], current_pose) << " m away");
+        }
+        // if the closest waypoint is too close
+        if (distanceFromWayPoint(msg.poses[closest_waypoint], current_pose) < lookahead_distance_min)
+        {
+            RCLCPP_WARN_STREAM(this->get_logger(), "Waypoint too close: " << std::fixed << std::setprecision(1) << distanceFromWayPoint(msg.poses[closest_waypoint], current_pose) << " m away");
+        }
+        // if last waypoint is reached, stop
+        if (closest_waypoint >= int(msg.poses.size() - 1))
+        {
+            if (last_waypoint_reached == false)
+            {
+                last_waypoint_reached_time = this->now();
+            }
+            RCLCPP_INFO_STREAM(this->get_logger(), "Last waypoint reached at " << std::fixed << std::setprecision(1) << (last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 << "s ago");
+            last_waypoint_reached = true;
+        }
+        already_visited_waypoint = closest_waypoint;
+        pursuit_goal.pose.position = msg.poses[closest_waypoint].position;
+        pursuit_goal.pose.orientation = msg.poses[closest_waypoint].orientation;
+        goal_pub_->publish(pursuit_goal);
     }
-    already_visited_waypoint = closest_waypoint;
-    //RCLCPP_INFO_STREAM(node->get_logger(), "closest_waypoint id: " << closest_waypoint);
-
-    pursuit_goal.pose.position = msg.poses[closest_waypoint].position;
-    pursuit_goal.pose.orientation = msg.poses[closest_waypoint].orientation;
-    goal_pub_->publish(pursuit_goal);
-}
-void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
-{
-    std_msgs::msg::Float32 speed_msg;
-    speed_msg.data = msg.data[already_visited_waypoint];
-    speed_pub_->publish(speed_msg);
-}
-
-// get tf2 transform from map to lexus3/base_link
-void getTransform()
-{
-    tf2_ros::Buffer tfBuffer(node->get_clock());
-    tf2_ros::TransformListener tfListener(tfBuffer);
-    geometry_msgs::msg::TransformStamped transformStamped;
-    try
+    void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
     {
-        transformStamped = tfBuffer.lookupTransform("map", "lexus3/base_link", rclcpp::Time(0));
+        std_msgs::msg::Float32 speed_msg;
+        speed_msg.data = msg.data[already_visited_waypoint];
+        // RCLCPP_INFO_STREAM(this->get_logger(), "Target speed:" << speed_msg.data << " m/s");
+        //  stop at the end of the path
+        if (last_waypoint_reached == true)
+        {
+            if ((last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 > 5.0)
+            {
+                speed_msg.data = 0.0;
+                RCLCPP_INFO_STREAM(this->get_logger(), "STOP: last waypoint reached at more than 5s ago");
+            }
+        }
+        speed_pub_->publish(speed_msg);
     }
-    catch (tf2::TransformException &ex)
-    {
-        RCLCPP_WARN(node->get_logger(), "Could not get transform: %s", ex.what());
-    }
-    current_pose.position.x = transformStamped.transform.translation.x;
-    current_pose.position.y = transformStamped.transform.translation.y;
-    current_pose.position.z = transformStamped.transform.translation.z;
-    current_pose.orientation.x = transformStamped.transform.rotation.x;
-    current_pose.orientation.y = transformStamped.transform.rotation.y;
-    current_pose.orientation.z = transformStamped.transform.rotation.z;
-    current_pose.orientation.w = transformStamped.transform.rotation.w;
-}
 
+    // get tf2 transform from map to lexus3/base_link
+    void getTransform()
+    {
+        geometry_msgs::msg::TransformStamped transformStamped;
+        try
+        {
+            transformStamped = tf_buffer_->lookupTransform("map", "lexus3/base_link", tf2::TimePointZero);
+        }
+
+        catch (const tf2::TransformException &ex)
+        {
+            // RCLCPP_WARN(this->get_logger(), "Could not get transform: %s", ex.what());
+            return;
+        }
+        current_pose.position.x = transformStamped.transform.translation.x;
+        current_pose.position.y = transformStamped.transform.translation.y;
+        current_pose.position.z = transformStamped.transform.translation.z;
+        current_pose.orientation.x = transformStamped.transform.rotation.x;
+        current_pose.orientation.y = transformStamped.transform.rotation.y;
+        current_pose.orientation.z = transformStamped.transform.rotation.z;
+        current_pose.orientation.w = transformStamped.transform.rotation.w;
+        // RCLCPP_INFO_STREAM(this->get_logger(), "current_pose: " << current_pose.position.x << ", " << current_pose.position.y << ", " << current_pose.position.z);
+    }
+
+    void timer_callback()
+    {
+        // RCLCPP_INFO(this->get_logger(), "timer");
+        getTransform();
+    }
+
+    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr speed_pub_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_w_;
+    rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_s_;
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+    int already_visited_waypoint = 0;
+    // parameters
+    std::string waypoint_topic = "lexus3/waypointarray";
+    double lookahead_distance_min = 8.5; // Lexus3 front from base_link: 2.789 + 1.08 = 3.869
+    double lookahead_distance_max = lookahead_distance_min + 15.0;
+    geometry_msgs::msg::Pose current_pose;
+    rclcpp::Time last_waypoint_reached_time;
+    bool last_waypoint_reached = false;
+};
 
 int main(int argc, char **argv)
 {
-    current_pose.position.x = 35.0;
-    current_pose.position.y = 70.0;
-
     rclcpp::init(argc, argv);
-    node = rclcpp::Node::make_shared("waypoint_to_target_node");
-
-    node->declare_parameter<std::string>("waypoint_topic", "");
-    // node->get_parameter("waypoint_topic", waypoint_topic);
-
-    goal_pub_ = node->create_publisher<visualization_msgs::msg::Marker>("/lexus3/pursuitgoal", 10);
-    speed_pub_ = node->create_publisher<std_msgs::msg::Float32>("/lexus3/pursuitspeedtarget", 10);
-
-    auto sub_w_ = node->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, waypointCallback);
-    auto sub_s_ = node->create_subscription<std_msgs::msg::Float32MultiArray>("/lexus3/waypointarray_speeds", 10, speedCallback);
-    // Call on_timer function every second
-    auto timer_ = node->create_wall_timer(std::chrono::milliseconds(1000), getTransform);
-    RCLCPP_INFO_STREAM(node->get_logger(), "pure_pursuit_node started: ");
-    while (rclcpp::ok())
-    {
-        rclcpp::spin_some(node);
-    }
+    rclcpp::spin(std::make_shared<WaypointToTarget>());
     rclcpp::shutdown();
     return 0;
 }
