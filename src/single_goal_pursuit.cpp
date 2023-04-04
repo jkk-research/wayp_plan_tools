@@ -29,7 +29,7 @@ public:
   {
     RCLCPP_INFO_STREAM(this->get_logger(), "pure_pursuit_node started: ");
     this->declare_parameter<std::string>("waypoint_topic", "");
-    // this->get_parameter("waypoint_topic", waypoint_topic);
+    this->get_parameter("waypoint_topic", waypoint_topic);
 
     goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/lexus3/cmd_vel", 10);
     sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&SingleGoalPursuit::waypointCallback, this, _1));

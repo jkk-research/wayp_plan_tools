@@ -37,9 +37,9 @@ public:
         this->declare_parameter<std::string>("waypoint_topic", "");
         // this->get_parameter("waypoint_topic", waypoint_topic);
 
-        goal_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("lexus3/pursuitgoal", 10);
+        goal_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("lexus3/pursuittarget_marker", 10);
         speed_pub_ = this->create_publisher<std_msgs::msg::Float32>("lexus3/pursuitspeedtarget", 10);
-
+        target_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("lexus3/targetpoints", 10);   
         sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&WaypointToTarget::waypointCallback, this, _1));
         sub_s_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("lexus3/waypointarray_speeds", 10, std::bind(&WaypointToTarget::speedCallback, this, _1));
         RCLCPP_INFO_STREAM(this->get_logger(), "waypoint_to_target node started");
@@ -56,6 +56,7 @@ private:
     void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
     {
         visualization_msgs::msg::Marker pursuit_goal;
+        geometry_msgs::msg::PoseArray target_pose;
         pursuit_goal.header.frame_id = "/map";
         pursuit_goal.header.stamp = this->now();
         pursuit_goal.ns = "pursuit_goal";
@@ -111,7 +112,13 @@ private:
         already_visited_waypoint = closest_waypoint;
         pursuit_goal.pose.position = msg.poses[closest_waypoint].position;
         pursuit_goal.pose.orientation = msg.poses[closest_waypoint].orientation;
+        // TODO: transfrom to local frame
+        geometry_msgs::msg::Pose p; // a pose to put in the target_pose array
+        p.position = msg.poses[closest_waypoint].position;
+        p.orientation = msg.poses[closest_waypoint].orientation;
+        target_pose.poses.push_back(p);
         goal_pub_->publish(pursuit_goal);
+        target_pub_->publish(target_pose);
     }
     void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
     {
@@ -163,6 +170,7 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr speed_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr target_pub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_w_;
     rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_s_;
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;

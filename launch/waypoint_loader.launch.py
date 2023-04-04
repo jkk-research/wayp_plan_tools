@@ -16,7 +16,9 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 #{"file_dir": "/mnt/c/waypoints"},
-                {"file_dir": pkg_dir + "/csv"},
-                {"file_name": "example01.csv"}],
+                # {"file_dir": pkg_dir + "/csv"},
+                # {"file_name": "example01.csv"}],
+                {"file_dir": "/mnt/bag/waypoints/"},
+                {"file_name": "gyor1.csv"}],
         )
     ])
