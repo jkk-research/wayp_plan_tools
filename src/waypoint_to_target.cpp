@@ -20,6 +20,8 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_ros/buffer.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2/convert.h"
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
@@ -31,8 +33,8 @@ public:
     {
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-        // Call timer_callback function every second
-        timer_ = this->create_wall_timer(std::chrono::milliseconds(1000), std::bind(&WaypointToTarget::timer_callback, this));
+        // Call timer_callback function 20 Hz, 50 milliseconds 
+        timer_ = this->create_wall_timer(std::chrono::milliseconds(50), std::bind(&WaypointToTarget::timer_callback, this));
 
         this->declare_parameter<std::string>("waypoint_topic", "");
         // this->get_parameter("waypoint_topic", waypoint_topic);
@@ -56,8 +58,8 @@ private:
     void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
     {
         visualization_msgs::msg::Marker pursuit_goal;
-        geometry_msgs::msg::PoseArray target_pose;
-        pursuit_goal.header.frame_id = "/map";
+        geometry_msgs::msg::PoseArray target_pose_arr;
+        pursuit_goal.header.frame_id = "lexus3/base_link";
         pursuit_goal.header.stamp = this->now();
         pursuit_goal.ns = "pursuit_goal";
         pursuit_goal.id = 0;
@@ -112,13 +114,19 @@ private:
         already_visited_waypoint = closest_waypoint;
         pursuit_goal.pose.position = msg.poses[closest_waypoint].position;
         pursuit_goal.pose.orientation = msg.poses[closest_waypoint].orientation;
-        // TODO: transfrom to local frame
-        geometry_msgs::msg::Pose p; // a pose to put in the target_pose array
-        p.position = msg.poses[closest_waypoint].position;
-        p.orientation = msg.poses[closest_waypoint].orientation;
-        target_pose.poses.push_back(p);
+        geometry_msgs::msg::Pose pose_global; // a pose to put in the target_pose array
+        pose_global.position = msg.poses[closest_waypoint].position;
+        pose_global.orientation = msg.poses[closest_waypoint].orientation;
+        // doTransform target_pose[0] to local frame
+        geometry_msgs::msg::Pose target_pose_local, pursuit_goal_local;
+        tf2::doTransform(pose_global, target_pose_local, transformInverse); 
+        tf2::doTransform(pursuit_goal.pose, pursuit_goal_local, transformInverse); 
+        pursuit_goal.pose.position = pursuit_goal_local.position;
+        pursuit_goal.pose.orientation = pursuit_goal_local.orientation;        
+        target_pose_arr.poses.push_back(target_pose_local);
+        // RCLCPP_INFO_STREAM(this->get_logger(), "transformInv: " << transformInverse.transform.translation.x << ", " << transformInverse.transform.translation.y << ", " << transformInverse.transform.translation.z);
         goal_pub_->publish(pursuit_goal);
-        target_pub_->publish(target_pose);
+        target_pub_->publish(target_pose_arr);
     }
     void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
     {
@@ -143,7 +151,9 @@ private:
         geometry_msgs::msg::TransformStamped transformStamped;
         try
         {
+            // TODO: better way?
             transformStamped = tf_buffer_->lookupTransform("map", "lexus3/base_link", tf2::TimePointZero);
+            transformInverse = tf_buffer_->lookupTransform("lexus3/base_link", "map", tf2::TimePointZero);
         }
 
         catch (const tf2::TransformException &ex)
@@ -181,6 +191,7 @@ private:
     double lookahead_distance_min = 8.5; // Lexus3 front from base_link: 2.789 + 1.08 = 3.869
     double lookahead_distance_max = lookahead_distance_min + 15.0;
     geometry_msgs::msg::Pose current_pose;
+    geometry_msgs::msg::TransformStamped transformInverse;
     rclcpp::Time last_waypoint_reached_time;
     bool last_waypoint_reached = false;
 };
