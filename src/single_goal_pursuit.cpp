@@ -43,6 +43,7 @@ private:
     float alpha = atan2(goal_y, goal_x);
     float lookahead_distance = sqrt(pow(goal_x, 2) + pow(goal_y, 2));
     float steering_angle = atan2(2.0 * wheelbase * sin(alpha) / (lookahead_distance), 1);
+    steering_angle *= 14.8; // TODO: ratio to param
     return steering_angle;
   }
 
