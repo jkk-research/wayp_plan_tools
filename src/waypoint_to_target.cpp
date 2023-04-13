@@ -66,6 +66,7 @@ public:
         goal_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("lexus3/pursuittarget_marker", 10);
         speed_pub_ = this->create_publisher<std_msgs::msg::Float32>("lexus3/pursuitspeedtarget", 10);
         target_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("lexus3/targetpoints", 10);   
+        metrics_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("lexus3/metrics_wayp", 10);   
         sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&WaypointToTarget::waypointCallback, this, _1));
         sub_s_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("lexus3/waypointarray_speeds", 10, std::bind(&WaypointToTarget::speedCallback, this, _1));
         RCLCPP_INFO_STREAM(this->get_logger(), "waypoint_to_target node started");
@@ -117,6 +118,7 @@ private:
         else{
             average_distance = (average_distance * average_distance_count + smallest_curr_distance) / (average_distance_count + 1);
         }
+        average_distance_count += 1;
         metrics_arr.data[metrics::CUR_LAT_DISTANCE] = smallest_curr_distance;
         metrics_arr.data[metrics::CUR_WAYPOINT_ID] = closest_waypoint;
         metrics_arr.data[metrics::AVG_LAT_DISTANCE] = average_distance; 
@@ -222,12 +224,14 @@ private:
         goal_pub_->publish(pursuit_goal);
         target_pub_->publish(target_pose_arr);
         speed_pub_->publish(speed_msg);
+        metrics_pub_->publish(metrics_arr);
     }
 
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr speed_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr target_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr metrics_pub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_w_;
     rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_s_;
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_; 
