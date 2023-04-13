@@ -57,8 +57,7 @@ private:
 
     void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
     {
-        visualization_msgs::msg::Marker pursuit_goal;
-        geometry_msgs::msg::PoseArray target_pose_arr;
+        target_pose_arr.poses.clear();
         pursuit_goal.header.frame_id = "lexus3/base_link";
         pursuit_goal.header.stamp = this->now();
         pursuit_goal.ns = "pursuit_goal";
@@ -125,12 +124,9 @@ private:
         pursuit_goal.pose.orientation = pursuit_goal_local.orientation;        
         target_pose_arr.poses.push_back(target_pose_local);
         // RCLCPP_INFO_STREAM(this->get_logger(), "transformInv: " << transformInverse.transform.translation.x << ", " << transformInverse.transform.translation.y << ", " << transformInverse.transform.translation.z);
-        goal_pub_->publish(pursuit_goal);
-        target_pub_->publish(target_pose_arr);
     }
     void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
     {
-        std_msgs::msg::Float32 speed_msg;
         speed_msg.data = msg.data[already_visited_waypoint];
         // RCLCPP_INFO_STREAM(this->get_logger(), "Target speed:" << speed_msg.data << " m/s");
         //  stop at the end of the path
@@ -142,7 +138,6 @@ private:
                 RCLCPP_INFO_STREAM(this->get_logger(), "STOP: last waypoint reached at more than 5s ago");
             }
         }
-        speed_pub_->publish(speed_msg);
     }
 
     // get tf2 transform from map to lexus3/base_link
@@ -175,6 +170,9 @@ private:
     {
         // RCLCPP_INFO(this->get_logger(), "timer");
         getTransform();
+        goal_pub_->publish(pursuit_goal);
+        target_pub_->publish(target_pose_arr);
+        speed_pub_->publish(speed_msg);
     }
 
     rclcpp::TimerBase::SharedPtr timer_;
@@ -194,6 +192,9 @@ private:
     geometry_msgs::msg::TransformStamped transformInverse;
     rclcpp::Time last_waypoint_reached_time;
     bool last_waypoint_reached = false;
+    visualization_msgs::msg::Marker pursuit_goal;
+    geometry_msgs::msg::PoseArray target_pose_arr;
+    std_msgs::msg::Float32 speed_msg;
 };
 
 int main(int argc, char **argv)

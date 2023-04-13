@@ -7,6 +7,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/color_rgba.hpp"
 #include "std_msgs/msg/float32.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -20,6 +21,7 @@
 std::string waypoint_topic = "/lexus3/pursuitgoal";
 geometry_msgs::msg::Twist pursuit_vel;
 
+using namespace std::chrono_literals;
 using std::placeholders::_1;
 
 class SingleGoalPursuit : public rclcpp::Node
@@ -32,8 +34,14 @@ public:
     this->get_parameter("waypoint_topic", waypoint_topic);
 
     goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/lexus3/cmd_vel", 10);
+    reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("/lexus3/control_reinit", 10);
     sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&SingleGoalPursuit::waypointCallback, this, _1));
     sub_s_ = this->create_subscription<std_msgs::msg::Float32>("/lexus3/pursuitspeedtarget", 10, std::bind(&SingleGoalPursuit::speedCallback, this, _1));
+    timer_ = this->create_wall_timer(50ms, std::bind(&SingleGoalPursuit::timerLoop, this));
+    std::this_thread::sleep_for(600ms);
+    reinitControl();
+    std::this_thread::sleep_for(600ms);
+    reinitControl();
   }
 
 private:
@@ -55,13 +63,26 @@ private:
   void waypointCallback(const geometry_msgs::msg::PoseArray &msg) const
   {
     pursuit_vel.angular.z = calcPursuitAngle(msg.poses[0].position.x, msg.poses[0].position.y);
+  }
+  void timerLoop()
+  {
+    //RCLCPP_INFO_STREAM(this->get_logger(), "timer");
     goal_pub_->publish(pursuit_vel);
+
+  }
+  void reinitControl(){
+    RCLCPP_INFO_STREAM(this->get_logger(), "reinitControl");
+    std_msgs::msg::Bool reinit;
+    reinit.data = true;
+    reinit_pub_->publish(reinit);
   }
 
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_w_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_s_;
   // parameters
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr goal_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reinit_pub_;
+  rclcpp::TimerBase::SharedPtr timer_;
   float wheelbase = 2.789; // Lexus3
 };
 
