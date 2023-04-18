@@ -50,6 +50,9 @@ It also provides a `/metrics_wayp` array topic with the following  elements:
 |`[2]` | current waypoint ID
 |`[3]` | target waypoint ID
 |`[4]` | target waypoint longitudinal distance 
+
+<img src="csv/lookahead01.svg" width=60% />
+
 # `waypoint_saver` node 
 Saves the waypoints to a csv.
 # `waypoint_loader` node

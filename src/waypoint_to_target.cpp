@@ -16,7 +16,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
-
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2_ros/transform_listener.h"
@@ -43,6 +43,33 @@ namespace metrics // add when new metrics appear
 class WaypointToTarget : public rclcpp::Node
 {
 public:
+    rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters)
+    {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        result.reason = "success";
+        for (const auto &param: parameters)
+        {
+            RCLCPP_INFO_STREAM(this->get_logger(), "Param update: " << param.get_name().c_str() << ": " <<param.value_to_string().c_str());
+            if (param.get_name() == "lookahead_min")
+            {
+                lookahead_min = param.as_double();
+            }
+            if(param.get_name() == "lookahead_max")
+            {
+                lookahead_max = param.as_double();
+            }
+            if(param.get_name() == "mps_alpha")
+            {
+                mps_alpha = param.as_double();
+            }
+            if(param.get_name() == "mps_beta")
+            {
+                mps_beta = param.as_double();
+            }
+        }
+        return result;
+    }
     WaypointToTarget() : Node("waypoint_to_target_node")
     {
         metrics_arr.data.resize(metrics::NOT_USED_YET); // initialize the metrics array
@@ -53,9 +80,14 @@ public:
 
         this->declare_parameter<std::string>("waypoint_topic", "");
         this->get_parameter("waypoint_topic", waypoint_topic);
-        this->declare_parameter<double>("lookahead_distance", 9.0);
-        this->get_parameter("lookahead_distance", lookahead_distance_min);
-        lookahead_distance_max = lookahead_distance_min + 10.0;
+        this->declare_parameter<double>("lookahead_min", 9.0);
+        this->get_parameter("lookahead_min", lookahead_min);
+        this->declare_parameter<double>("lookahead_max", 18.0);
+        this->get_parameter("lookahead_max", lookahead_max);
+        this->declare_parameter<double>("mps_alpha", 3.2);
+        this->get_parameter("mps_alpha", mps_alpha);
+        this->declare_parameter<double>("mps_beta", 5.2);
+        this->get_parameter("mps_beta", mps_beta);        
 
         if(waypoint_topic == "")
         {
@@ -69,8 +101,9 @@ public:
         metrics_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("lexus3/metrics_wayp", 10);   
         sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&WaypointToTarget::waypointCallback, this, _1));
         sub_s_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("lexus3/waypointarray_speeds", 10, std::bind(&WaypointToTarget::speedCallback, this, _1));
+        callback_handle_ = this->add_on_set_parameters_callback(std::bind(&WaypointToTarget::parametersCallback, this, std::placeholders::_1));
         RCLCPP_INFO_STREAM(this->get_logger(), "waypoint_to_target node started");
-        RCLCPP_INFO_STREAM(this->get_logger(), "lookahead_distance_min: " << lookahead_distance_min << " lookahead_distance_max: " << lookahead_distance_max);
+        RCLCPP_INFO_STREAM(this->get_logger(), "lookahead_min: " << lookahead_min << " lookahead_max: " << lookahead_max << " mps_alpha: " << mps_alpha << " mps_beta: "  << mps_beta);
 
     }
 
@@ -80,6 +113,24 @@ private:
         double dx = waypoint.position.x - pose_curr.position.x;
         double dy = waypoint.position.y - pose_curr.position.y;
         return sqrt(dx * dx + dy * dy);
+    }
+
+    double calcLookahead(const double speed_mps)
+    {
+        double actual_lookahead = lookahead_min;
+        if(speed_mps < mps_alpha)
+        {
+            actual_lookahead = lookahead_min;
+        }
+        else if (speed_mps > mps_beta)
+        {
+            actual_lookahead = lookahead_max;
+        }
+        else{
+            // slope from lookahead_min to lookahead_max between mps_alpha and mps_beta
+            actual_lookahead = (lookahead_max - lookahead_min) / (mps_beta - mps_alpha) * (speed_mps - mps_alpha) + lookahead_min;
+        }
+        return actual_lookahead;
     }
 
     void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
@@ -123,12 +174,15 @@ private:
         metrics_arr.data[metrics::CUR_WAYPOINT_ID] = closest_waypoint;
         metrics_arr.data[metrics::AVG_LAT_DISTANCE] = average_distance; 
 
+        // calculate the adaptive lookahead distance
+        double lookahead_actual = calcLookahead(speed_msg.data);
+
         for (int i = closest_waypoint; i <= int(msg.poses.size()); i++)
         {
             // RCLCPP_INFO_STREAM(this->get_logger(), "distanceFromWayPoint: " << distanceFromWayPoint(msg.poses[i], current_pose));
-            if (distanceFromWayPoint(msg.poses[i], current_pose) > lookahead_distance_min)
+            if (distanceFromWayPoint(msg.poses[i], current_pose) > lookahead_actual)
             {
-                if (distanceFromWayPoint(msg.poses[i], current_pose) < lookahead_distance_max)
+                if (distanceFromWayPoint(msg.poses[i], current_pose) < lookahead_actual + 10.0)
                 {
                     target_waypoint = i;
                     metrics_arr.data[metrics::TRG_WAYPOINT_ID] = target_waypoint;
@@ -142,12 +196,12 @@ private:
         //RCLCPP_INFO_STREAM(this->get_logger(), "Closest waypoint[" << closest_waypoint << "] " << std::fixed << std::setprecision(1) << metrics_arr.data[metrics::CUR_LAT_DISTANCE] << " m away");
         RCLCPP_INFO_STREAM(this->get_logger(), "Target waypoint[" << target_waypoint << "] " << std::fixed << std::setprecision(1) << metrics_arr.data[metrics::TRG_WAY_LON_DIST] << " m away");
         // if the lookahead distance far away
-        if (metrics_arr.data[metrics::TRG_WAY_LON_DIST] > (lookahead_distance_max + 2.0))
+        if (metrics_arr.data[metrics::TRG_WAY_LON_DIST] > (lookahead_max + 2.0))
         {
             RCLCPP_WARN_STREAM(this->get_logger(), "Target is " << std::fixed << std::setprecision(1) << metrics_arr.data[metrics::TRG_WAY_LON_DIST] << " m away");
         }
         // if the target waypoint is too close
-        if (metrics_arr.data[metrics::TRG_WAY_LON_DIST] < lookahead_distance_min)
+        if (metrics_arr.data[metrics::TRG_WAY_LON_DIST] < lookahead_min)
         {
             RCLCPP_WARN_STREAM(this->get_logger(), "Tagret too close: " << std::fixed << std::setprecision(1) << metrics_arr.data[metrics::TRG_WAY_LON_DIST] << " m away");
         }
@@ -237,10 +291,13 @@ private:
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_; 
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
     std_msgs::msg::Float32MultiArray metrics_arr; // array of metrics (eg. current lateral distance, average lateral distance, current waypoint ID etc)
+    OnSetParametersCallbackHandle::SharedPtr callback_handle_;
     // parameters
     std::string waypoint_topic = "lexus3/waypointarray";
-    double lookahead_distance_min = 8.5; // Lexus3 front from base_link: 2.789 + 1.08 = 3.869
-    double lookahead_distance_max = lookahead_distance_min + 15.0;
+    double lookahead_min = 8.5; // Lexus3 front from base_link: 2.789 + 1.08 = 3.869
+    double lookahead_max = lookahead_min + 15.0;
+    double mps_alpha = 3.0; // (3*3.6 = 10.8 km/h)
+    double mps_beta = 5.0; // (5*3.6 = 18 km/h)
     float average_distance = 0.0; 
     int average_distance_count = 0;
     geometry_msgs::msg::Pose current_pose;
