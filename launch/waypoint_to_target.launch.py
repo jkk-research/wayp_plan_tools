@@ -16,7 +16,7 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 {"lookahead_min": 8.5},
-                {"lookahead_max": 16.0},
+                {"lookahead_max": 12.0},
                 {"mps_alpha": 3.5},
                 {"mps_beta": 5.5}, 
                 {"waypoint_topic": "lexus3/waypointarray"}

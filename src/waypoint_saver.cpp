@@ -38,6 +38,7 @@
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
+std::ofstream ofs;
 
 class WaypointSaver : public rclcpp::Node
 {
@@ -58,14 +59,14 @@ public:
         {
             file_name = "waypoint01.csv";
         }
-        std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
+        ofs.open((file_dir + "/" + file_name).c_str(), std::ios::app);
         // mps = m/s metre per second ROS 2 standard SI unit for velocity
         ofs << "x,y,z,yaw,mps,change_flag" << std::endl;
         topic_based_saving = false; // set (TODO: param)
         if (topic_based_saving)
         {
-            RCLCPP_INFO_STREAM(this->get_logger(), "Save to " << file_dir << "/" << file_name << " source: pose topic");
-            sub_current_pose_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("/current_pose", 10, std::bind(&WaypointSaver::poseCurrentCallback, this, _1));
+            //RCLCPP_INFO_STREAM(this->get_logger(), "Save to " << file_dir << "/" << file_name << " source: pose topic");
+            //sub_current_pose_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("/current_pose", 10, std::bind(&WaypointSaver::poseCurrentCallback, this, _1));
         }
         else
         {
@@ -83,14 +84,14 @@ private:
         speed_mps = msg.data / 3.6;
         //RCLCPP_INFO_STREAM(this->get_logger(), "Speed: " << msg.data << " km/h");
     }
-
+    /*
     void poseCurrentCallback(const geometry_msgs::msg::PoseStamped &current_pose)
     {
         // RCLCPP_INFO_STREAM(this->get_logger(), "X : " << current_pose.pose.position.x);
         double distance = sqrt(pow((current_pose.pose.position.x - previous_pose.position.x), 2) +
                                pow((current_pose.pose.position.y - previous_pose.position.y), 2));
 
-        std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
+        //std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
         tf2::Quaternion q(
             current_pose.pose.orientation.x,
             current_pose.pose.orientation.y,
@@ -110,14 +111,13 @@ private:
             previous_pose = current_pose.pose;
         }
     }
+    */
     // get tf2 transform from map to lexus3/base_link
     void getTransform()
     {
         //RCLCPP_INFO_STREAM(this->get_logger(), "Speed: " << speed_mps << " m/s");
-        tf2_ros::Buffer tfBuffer(this->get_clock());
-        tf2_ros::TransformListener tfListener(tfBuffer);
+
         geometry_msgs::msg::TransformStamped transformStamped;
-        geometry_msgs::msg::TransformStamped t;
         try
         {
             transformStamped = tf_buffer_->lookupTransform("map", "lexus3/base_link", tf2::TimePointZero); 
@@ -125,6 +125,10 @@ private:
         catch (const tf2::TransformException &ex)
         {
             RCLCPP_WARN(this->get_logger(), "Could not get transform: %s", ex.what());
+            return;
+        }catch(const std::exception &ex)
+        {
+            RCLCPP_ERROR(this->get_logger(), "Error TF");
             return;
         }
         current_tf.position.x = transformStamped.transform.translation.x;
@@ -138,24 +142,21 @@ private:
         double distance = sqrt(pow((current_tf.position.x - previous_pose.position.x), 2) +
                                pow((current_tf.position.y - previous_pose.position.y), 2));
 
-        std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
-        tf2::Quaternion q(
-            current_tf.orientation.x,
-            current_tf.orientation.y,
-            current_tf.orientation.z,
-            current_tf.orientation.w);
-        tf2::Matrix3x3 m(q);
-        double roll, pitch, yaw;
-        m.getRPY(roll, pitch, yaw);
-
-        // RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << current_tf.position.x << " " << current_tf.position.y << " " << yaw);
-
         // if car moves [interval] meters
         if (distance > interval_)
         {
+            tf2::Quaternion q(
+                current_tf.orientation.x,
+                current_tf.orientation.y,
+                current_tf.orientation.z,
+                current_tf.orientation.w);
+            tf2::Matrix3x3 m(q);
+            double roll, pitch, yaw;
+            m.getRPY(roll, pitch, yaw);
             //RCLCPP_INFO_STREAM(this->get_logger(), "distance: " << std::fixed << std::setprecision(2) << distance);
             RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw speed: " << std::fixed << std::setprecision(2) << current_tf.position.x << " " << current_tf.position.y << " " << yaw << " " << speed_mps << " "<< file_name.c_str());
             ofs << std::fixed << std::setprecision(4) << current_tf.position.x << "," << current_tf.position.y << "," << current_tf.position.z << "," << yaw << "," << speed_mps << ",0" << std::endl;
+            ofs.flush();
             previous_pose = current_tf;
             if (speed_mps < -0.01)
             {
@@ -179,6 +180,7 @@ int main(int argc, char *argv[])
 {
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<WaypointSaver>());
+    ofs.close();
     rclcpp::shutdown();
     return 0;
 }

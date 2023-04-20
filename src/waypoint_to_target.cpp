@@ -82,7 +82,7 @@ public:
         this->get_parameter("waypoint_topic", waypoint_topic);
         this->declare_parameter<double>("lookahead_min", 9.0);
         this->get_parameter("lookahead_min", lookahead_min);
-        this->declare_parameter<double>("lookahead_max", 18.0);
+        this->declare_parameter<double>("lookahead_max", 14.5);
         this->get_parameter("lookahead_max", lookahead_max);
         this->declare_parameter<double>("mps_alpha", 3.2);
         this->get_parameter("mps_alpha", mps_alpha);
@@ -232,7 +232,7 @@ private:
     void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
     {
         // speed data from the target waypoint
-        speed_msg.data = msg.data[metrics_arr.data[metrics::TRG_WAYPOINT_ID]];
+        speed_msg.data = msg.data[metrics_arr.data[metrics::CUR_WAYPOINT_ID]];
         // RCLCPP_INFO_STREAM(this->get_logger(), "Target speed:" << speed_msg.data << " m/s");
         //  stop at the end of the path
         if (last_waypoint_reached == true)
