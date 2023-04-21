@@ -67,6 +67,14 @@ public:
             {
                 mps_beta = param.as_double();
             }
+            if(param.get_name() == "static_speed_enabled")
+            {
+                static_speed_enabled = param.as_bool();
+            }
+            if(param.get_name() == "static_speed")
+            {
+                static_speed = param.as_double();
+            }
         }
         return result;
     }
@@ -87,7 +95,11 @@ public:
         this->declare_parameter<double>("mps_alpha", 3.2);
         this->get_parameter("mps_alpha", mps_alpha);
         this->declare_parameter<double>("mps_beta", 5.2);
-        this->get_parameter("mps_beta", mps_beta);        
+        this->get_parameter("mps_beta", mps_beta);      
+        this->declare_parameter<double>("static_speed", 4.0);
+        this->get_parameter("static_speed", static_speed);            
+        this->declare_parameter<bool>("static_speed_enabled", false);
+        this->get_parameter("static_speed_enabled", static_speed_enabled);        
 
         if(waypoint_topic == "")
         {
@@ -151,11 +163,18 @@ private:
         pursuit_goal.color.a = 1.0;
         pursuit_goal.type = visualization_msgs::msg::Marker::CYLINDER;
         pursuit_goal.action = visualization_msgs::msg::Marker::MODIFY;
-        int closest_waypoint = 0; // closest waypoint to the current pose
         int target_waypoint = 0; // target waypoint to be published
         // find the closest waypoint where distanceFromWayPoint(msg.poses[i], current_pose) is the smallest
         double smallest_curr_distance = 100000000; //std::numeric_limits<double>::max();
-        for (int i = 0; i <= int(msg.poses.size()); i++){
+        if(closest_waypoint > int(msg.poses.size()) - 10)
+        {
+            closest_waypoint = 0;
+        } 
+        int search_start = closest_waypoint - 10;
+        int search_end = closest_waypoint + 10;
+        if (search_start < 0){search_start = 10; }
+        if (search_end > int(msg.poses.size())){search_end = int(msg.poses.size()); }
+        for (int i = search_start; i <= search_end; i++){
             if (smallest_curr_distance > distanceFromWayPoint(msg.poses[i], current_pose)){
                 closest_waypoint = i;
                 smallest_curr_distance = distanceFromWayPoint(msg.poses[i], current_pose);
@@ -232,16 +251,23 @@ private:
     void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
     {
         // speed data from the target waypoint
-        speed_msg.data = msg.data[metrics_arr.data[metrics::CUR_WAYPOINT_ID]];
+        if (static_speed_enabled){
+            speed_msg.data = static_speed;
+        }
+        else{
+            speed_msg.data = msg.data[metrics_arr.data[metrics::CUR_WAYPOINT_ID]];
+        }
         // RCLCPP_INFO_STREAM(this->get_logger(), "Target speed:" << speed_msg.data << " m/s");
         //  stop at the end of the path
         if (last_waypoint_reached == true)
         {
+            /* // TODO: param last_waypoint_reached_stop
             if ((last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 > 5.0)
             {
                 speed_msg.data = 0.0;
                 RCLCPP_INFO_STREAM(this->get_logger(), "STOP: last waypoint reached at more than 5s ago");
             }
+             */
         }
     }
 
@@ -298,12 +324,15 @@ private:
     double lookahead_max = lookahead_min + 15.0;
     double mps_alpha = 3.0; // (3*3.6 = 10.8 km/h)
     double mps_beta = 5.0; // (5*3.6 = 18 km/h)
+    int closest_waypoint = 0; // closest waypoint to the current pose
     float average_distance = 0.0; 
     int average_distance_count = 0;
     geometry_msgs::msg::Pose current_pose;
     geometry_msgs::msg::TransformStamped transformInverse;
     rclcpp::Time last_waypoint_reached_time;
     bool last_waypoint_reached = false;
+    bool static_speed_enabled = false;
+    double static_speed; // value of static speed in m/s
     visualization_msgs::msg::Marker pursuit_goal;
     geometry_msgs::msg::PoseArray target_pose_arr;
     std_msgs::msg::Float32 speed_msg;
