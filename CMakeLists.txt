@@ -45,6 +45,8 @@ add_executable(single_goal_pursuit src/single_goal_pursuit.cpp)
 ament_target_dependencies(single_goal_pursuit  ${ament_dependencies} )
 add_executable(multiple_goal_pursuit src/multiple_goal_pursuit.cpp)
 ament_target_dependencies(multiple_goal_pursuit  ${ament_dependencies} )
+add_executable(stanley_control src/stanley_control.cpp)
+ament_target_dependencies(stanley_control  ${ament_dependencies} )
 
 
 if(BUILD_TESTING)
@@ -67,5 +69,6 @@ install(TARGETS
   waypoint_to_target
   single_goal_pursuit
   multiple_goal_pursuit
+  stanley_control
   DESTINATION lib/${PROJECT_NAME})
 ament_package()

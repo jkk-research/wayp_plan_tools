@@ -2,12 +2,14 @@
 Waypoint and planner tools for `ROS 2` with mininal dependencies.
 
 Planner / control nodes:
-- `single_goal_pursuit`: Pure pursuit (for vehicles / robots)
+- `single_goal_pursuit`: Pure pursuit (for vehicles / robots), a simlpe cross-track error method
 - `multiple_goal_pursuit`: Multiple goal pursuit for vehicles / robots an implementation of our [paper](https://hjic.mk.uni-pannon.hu/index.php/hjic/article/view/914)
+- `stanley_control`: Stanley controller, a heading error + cross-track error method
 
 Waypoint nodes:
 - `waypoint_saver`: saves the waypoints to a csv
 - `waypoint_loader`: loads the waypoints from a csv to a ROS 2 topic
+- `waypoint_to_target`: translates the global waypoint array to local target waypoint(s), thus it makes possible to use the contoller nodes in a standalone way
 
 
 ## Build
@@ -39,13 +41,13 @@ The "classic" pure pursuit implementation
 Multiple goal pursuit for vehicles / robots, an implementation of our [paper](https://hjic.mk.uni-pannon.hu/index.php/hjic/article/view/914)
 
 # `waypoint_to_target` node
-Reads the waypoint array and speeds, from that it creates singel or mutliple goal points.
+Reads the waypoint array and speeds, from that it creates single or mutliple goal points.
 
 It also provides a `/metrics_wayp` array topic with the following  elements:
 
 | Array element | Meaning 
 | :--- | :--- 
-|`[0]` | current lateral distance to the waypoint
+|`[0]` | current lateral distance to the waypoint (cross-track error)
 |`[1]` | average lateral distance over time
 |`[2]` | current waypoint ID
 |`[3]` | target waypoint ID
