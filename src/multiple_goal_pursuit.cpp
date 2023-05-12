@@ -38,7 +38,7 @@ class MultipleGoalPursuit : public rclcpp::Node
       if (param.get_name() == "waypoint_topic")
       {
         waypoint_topic = param.as_string();
-        sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&SingleGoalPursuit::waypointCallback, this, _1));
+        sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&MultipleGoalPursuit::waypointCallback, this, _1));
       }
       if (param.get_name() == "wheelbase")
       {
