@@ -14,6 +14,7 @@
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
@@ -26,18 +27,42 @@ using std::placeholders::_1;
 
 class SingleGoalPursuit : public rclcpp::Node
 {
+  rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters)
+  {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    result.reason = "success";
+    for (const auto &param : parameters)
+    {
+      RCLCPP_INFO_STREAM(this->get_logger(), "Param update: " << param.get_name().c_str() << ": " << param.value_to_string().c_str());
+      if (param.get_name() == "waypoint_topic")
+      {
+        waypoint_topic = param.as_string();
+        sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&SingleGoalPursuit::waypointCallback, this, _1));
+      }
+      if (param.get_name() == "wheelbase")
+      {
+        wheelbase = param.as_double();
+      }
+    }
+    return result;
+  }
+
 public:
   SingleGoalPursuit() : Node("pure_pursuit_node")
   {
     RCLCPP_INFO_STREAM(this->get_logger(), "pure_pursuit_node started: ");
     this->declare_parameter<std::string>("waypoint_topic", "");
+    this->declare_parameter<float>("wheelbase", wheelbase);
     this->get_parameter("waypoint_topic", waypoint_topic);
+    this->get_parameter("wheelbase", wheelbase);
 
     goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/lexus3/cmd_vel", 10);
     reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("/lexus3/control_reinit", 10);
     sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&SingleGoalPursuit::waypointCallback, this, _1));
     sub_s_ = this->create_subscription<std_msgs::msg::Float32>("/lexus3/pursuitspeedtarget", 10, std::bind(&SingleGoalPursuit::speedCallback, this, _1));
     timer_ = this->create_wall_timer(50ms, std::bind(&SingleGoalPursuit::timerLoop, this));
+    callback_handle_ = this->add_on_set_parameters_callback(std::bind(&SingleGoalPursuit::parametersCallback, this, std::placeholders::_1));
     std::this_thread::sleep_for(600ms);
     reinitControl();
     std::this_thread::sleep_for(600ms);
@@ -66,11 +91,11 @@ private:
   }
   void timerLoop()
   {
-    //RCLCPP_INFO_STREAM(this->get_logger(), "timer");
+    // RCLCPP_INFO_STREAM(this->get_logger(), "timer");
     goal_pub_->publish(pursuit_vel);
-
   }
-  void reinitControl(){
+  void reinitControl()
+  {
     RCLCPP_INFO_STREAM(this->get_logger(), "reinitControl");
     std_msgs::msg::Bool reinit;
     reinit.data = true;
@@ -84,8 +109,8 @@ private:
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reinit_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   float wheelbase = 2.789; // Lexus3
+  OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 };
-
 
 int main(int argc, char **argv)
 {
