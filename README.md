@@ -5,6 +5,7 @@ Planner / control nodes:
 - `single_goal_pursuit`: Pure pursuit (for vehicles / robots), a simlpe cross-track error method
 - `multiple_goal_pursuit`: Multiple goal pursuit for vehicles / robots an implementation of our [paper](https://hjic.mk.uni-pannon.hu/index.php/hjic/article/view/914)
 - `stanley_control`: Stanley controller, a heading error + cross-track error method
+- `follow_the_carrot`: Follow-the-carrot, the simplest controller
 
 Waypoint nodes:
 - `waypoint_saver`: saves the waypoints to a csv
@@ -34,11 +35,20 @@ colcon build --packages-select wayp_plan_tools
 source ~/ros2_ws/install/local_setup.bash && source ~/ros2_ws/install/setup.bash
 ros2 launch wayp_plan_tools waypoint_saver.launch.py
 ```
+
+# Control nodes
+In this project the `single_goal_pursuit`, the `multiple_goal_pursuit`, `stanley_control` and the `follow_the_carrot` controllers are implemented. A high level overview about the algorithms is visible on the following figure:
+
+![](csv/control_overview01.svg)
+
 # `single_goal_pursuit` node
 The "classic" pure pursuit implementation
 
 # `multiple_goal_pursuit` node 
 Multiple goal pursuit for vehicles / robots, an implementation of our [paper](https://hjic.mk.uni-pannon.hu/index.php/hjic/article/view/914)
+
+# `follow_the_carrot` node
+Follow-the-carrot, the simplest controller
 
 # `waypoint_to_target` node
 Reads the waypoint array and speeds, from that it creates single or mutliple goal points.
