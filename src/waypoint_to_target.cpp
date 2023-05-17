@@ -164,12 +164,27 @@ private:
         pursuit_goal.type = visualization_msgs::msg::Marker::CYLINDER;
         pursuit_goal.action = visualization_msgs::msg::Marker::MODIFY;
         int target_waypoint = 0; // target waypoint to be published
+        // determine whether trajectory is linear (loop closure false) circular (loop closure true).
+        // loop closure is true, when the first and last waypoint are closer than 4.0 meters
+        if(distanceFromWayPoint(msg.poses[0], msg.poses[msg.poses.size() - 1]) < 4.0)
+        {
+            traj_closed_loop = true;
+        }
+        else
+        {
+            traj_closed_loop = false;
+        }
+        // RCLCPP_INFO_STREAM(this->get_logger(), "traj_closed_loop: " << traj_closed_loop);
         // find the closest waypoint where distanceFromWayPoint(msg.poses[i], current_pose) is the smallest
         double smallest_curr_distance = 100000000; //std::numeric_limits<double>::max();
-        if(closest_waypoint > int(msg.poses.size()) - 10)
-        {
-            closest_waypoint = 0;
-        } 
+        // in a circular loop trajectory, jump to the beginning of the trajectory when the end is reached
+        if(traj_closed_loop == true){
+            if(closest_waypoint > int(msg.poses.size()) - 10)
+            {
+                closest_waypoint = 0;
+            } 
+        }
+        // search for the closest waypoint within a search range (search_start, search_end)
         int search_start = closest_waypoint - 10;
         int search_end = closest_waypoint + 10;
         if (search_start < 0){search_start = 10; }
@@ -258,16 +273,16 @@ private:
             speed_msg.data = msg.data[metrics_arr.data[metrics::CUR_WAYPOINT_ID]];
         }
         // RCLCPP_INFO_STREAM(this->get_logger(), "Target speed:" << speed_msg.data << " m/s");
-        //  stop at the end of the path
-        if (last_waypoint_reached == true)
-        {
-            /* // TODO: param last_waypoint_reached_stop
-            if ((last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 > 5.0)
+        // stop at the end of the path (if the trajectory is not a circular loop)
+        if(traj_closed_loop == false){
+            if (last_waypoint_reached == true)
             {
-                speed_msg.data = 0.0;
-                RCLCPP_INFO_STREAM(this->get_logger(), "STOP: last waypoint reached at more than 5s ago");
+                if ((last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 > 5.0)
+                {
+                    speed_msg.data = 0.0;
+                    RCLCPP_INFO_STREAM(this->get_logger(), "STOP: last waypoint reached at more than 5s ago");
+                }
             }
-             */
         }
     }
 
@@ -332,6 +347,7 @@ private:
     rclcpp::Time last_waypoint_reached_time;
     bool last_waypoint_reached = false;
     bool static_speed_enabled = false;
+    bool traj_closed_loop = false; // Trajectory loop closure bool, if the trajectory is linear/open loop: false, if circular/cloded loop: true
     double static_speed; // value of static speed in m/s
     visualization_msgs::msg::Marker pursuit_goal;
     geometry_msgs::msg::PoseArray target_pose_arr;

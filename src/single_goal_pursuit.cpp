@@ -18,6 +18,7 @@
 
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
+//#include "wayp_plan_tools/common.hpp"
 
 std::string waypoint_topic = "/lexus3/pursuitgoal";
 geometry_msgs::msg::Twist pursuit_vel;

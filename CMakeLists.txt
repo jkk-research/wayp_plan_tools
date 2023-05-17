@@ -35,6 +35,10 @@ set(ament_dependencies
   tf2_geometry_msgs  
 )
 
+include_directories(
+  include
+)
+
 add_executable(waypoint_saver src/waypoint_saver.cpp)
 ament_target_dependencies(waypoint_saver  ${ament_dependencies} )
 add_executable(waypoint_loader src/waypoint_loader.cpp)

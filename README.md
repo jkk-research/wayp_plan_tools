@@ -56,9 +56,18 @@ It also provides a `/metrics_wayp` array topic with the following  elements:
 <img src="csv/lookahead01.svg" width=60% />
 
 # `waypoint_saver` node 
-Saves the waypoints to a csv.
+Saves the waypoints to a csv. Important parameters are `file_name` and `file_dir`. Set from terminal or from a [launch file](launch/waypoint_saver.launch.py)
+
+``` py
+ros2 run wayp_plan_tools waypoint_saver --ros-args -p file_name:=tmp1.csv -p file_dir:=/mnt/bag/waypoints
+```
+
 # `waypoint_loader` node
-Loads the waypoints from a csv to a ROS 2 topic.
+Loads the waypoints from a csv to a ROS 2 topic. Set from terminal or from a [launch file](launch/waypoint_loader.launch.py)
+
+``` py
+ros2 run wayp_plan_tools waypoint_loader --ros-args -p file_name:=tmp1.csv -p file_dir:=/mnt/bag/waypoints
+```
 
 
 

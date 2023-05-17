@@ -44,6 +44,10 @@ class StanleyControl : public rclcpp::Node
       {
         wheelbase = param.as_double();
       }
+      if(param.get_name() == "heading_err_rate")
+      {
+        heading_err_rate = param.as_double();
+      }
     }
     return result;
   }
@@ -54,8 +58,10 @@ public:
     RCLCPP_INFO_STREAM(this->get_logger(), "stanley_control_node started: ");
     this->declare_parameter<std::string>("waypoint_topic", "");
     this->declare_parameter<float>("wheelbase", wheelbase);
+    this->declare_parameter<float>("heading_err_rate", heading_err_rate);
     this->get_parameter("waypoint_topic", waypoint_topic);
     this->get_parameter("wheelbase", wheelbase);
+    this->get_parameter("heading_err_rate", heading_err_rate);
 
     goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/lexus3/cmd_vel", 10);
     reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("/lexus3/control_reinit", 10);
@@ -68,15 +74,19 @@ public:
   }
 
 private:
-  // TODO:
-  // heading error
-  // cross-track error
-  float calcStanley(float goal_x, float goal_y, float goal_yaw, float current_yaw) const
+  // TODO: field test
+  // This approach has 2 modifications compared to the original stanley controller
+  // 1. The cross-track error is calculated based on the lookahead distance, not the closest waypoint distance
+  // 2. Instead of the front axle, the rear axle is used as the reference point (the same as the pure pursuit controller) 
+  float calcStanley(float goal_x, float goal_y, float goal_yaw) const
   {
     float alpha = atan2(goal_y, goal_x);
     float lookahead_distance = sqrt(pow(goal_x, 2) + pow(goal_y, 2));
-    float steering_angle = atan2(2.0 * wheelbase * sin(alpha) / (lookahead_distance), 1);
-    return steering_angle;
+    // cross-track error
+    float cross_track_error = atan2(2.0 * wheelbase * sin(alpha) / (lookahead_distance), 1);
+    // heading error
+    float heading_error = goal_yaw * heading_err_rate;
+    return cross_track_error + heading_error;
   }
 
   void speedCallback(const std_msgs::msg::Float32 &msg) const
@@ -86,7 +96,15 @@ private:
 
   void waypointCallback(const geometry_msgs::msg::PoseArray &msg) const
   {
-    pursuit_vel.angular.z = calcStanley(msg.poses[0].position.x, msg.poses[0].position.y, 0, 0);
+    tf2::Quaternion q(
+        msg.poses[0].orientation.x,
+        msg.poses[0].orientation.y,
+        msg.poses[0].orientation.z,
+        msg.poses[0].orientation.w);
+    tf2::Matrix3x3 m(q);
+    double goal_roll, goal_pitch, goal_yaw;
+    m.getRPY(goal_roll, goal_pitch, goal_yaw);
+    pursuit_vel.angular.z = calcStanley(msg.poses[0].position.x, msg.poses[0].position.y, goal_yaw);
   }
   void timerLoop()
   {
@@ -109,6 +127,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   float wheelbase = 2.789; // Lexus3
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
+  float heading_err_rate = 1.0; // TODO: tune
 };
 
 int main(int argc, char **argv)
