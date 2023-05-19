@@ -228,7 +228,7 @@ private:
         metrics_arr.data[metrics::TRG_WAYPOINT_ID] = target_waypoint;
         
         //RCLCPP_INFO_STREAM(this->get_logger(), "Closest waypoint[" << closest_waypoint << "] " << std::fixed << std::setprecision(1) << metrics_arr.data[metrics::CUR_LAT_DISTANCE] << " m away");
-        RCLCPP_INFO_STREAM(this->get_logger(), "Target waypoint[" << target_waypoint << "] " << std::fixed << std::setprecision(1) << metrics_arr.data[metrics::TRG_WAY_LON_DIST] << " m away");
+        //RCLCPP_INFO_STREAM(this->get_logger(), "Target waypoint[" << target_waypoint << "] " << std::fixed << std::setprecision(1) << metrics_arr.data[metrics::TRG_WAY_LON_DIST] << " m away");
         // if the lookahead distance far away
         if (metrics_arr.data[metrics::TRG_WAY_LON_DIST] > (lookahead_max + 2.0))
         {
