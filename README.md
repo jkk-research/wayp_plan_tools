@@ -55,13 +55,14 @@ Reads the waypoint array and speeds, from that it creates single or mutliple goa
 
 It also provides a `/metrics_wayp` array topic with the following  elements:
 
-| Array element | Meaning 
-| :--- | :--- 
-|`[0]` | current lateral distance to the waypoint (cross-track error)
-|`[1]` | average lateral distance over time
-|`[2]` | current waypoint ID
-|`[3]` | target waypoint ID
-|`[4]` | target waypoint longitudinal distance 
+| Array element | Meaning | Const
+| :--- | :--- | :---
+|`[0]` | current lateral distance to the waypoint (signed, cross-track error) | `CUR_LAT_DIST_SIGNED`
+|`[1]` | current lateral distance to the waypoint (absolute value) | `CUR_LAT_DIST_ABS`
+|`[2]` | average lateral distance over time | `AVG_LAT_DISTANCE`
+|`[3]` | current waypoint ID | `CUR_WAYPOINT_ID`
+|`[4]` | target waypoint ID | `TRG_WAYPOINT_ID`
+|`[5]` | target waypoint longitudinal distance  | `TRG_WAY_LON_DIST`
 
 <img src="csv/lookahead01.svg" width=60% />
 
