@@ -216,9 +216,14 @@ private:
         metrics_arr.data[common_wpt::CUR_LAT_DIST_ABS] = smallest_curr_distance;
         metrics_arr.data[common_wpt::CUR_WAYPOINT_ID] = closest_waypoint;
         metrics_arr.data[common_wpt::AVG_LAT_DISTANCE] = average_distance;
-
-        metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED] = msg.poses[closest_waypoint].position.x; 
-
+        float lat_dist = msg.poses[closest_waypoint].position.x - current_pose.position.x;
+        if(lat_dist < 0)
+        {
+            metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED] = smallest_curr_distance; 
+        }
+        else{
+            metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED] = -1.0 * smallest_curr_distance; 
+        }
         // calculate the adaptive lookahead distance
         double lookahead_actual = calcLookahead(speed_msg.data);
 

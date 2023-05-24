@@ -66,9 +66,11 @@ public:
     this->declare_parameter<std::string>("waypoint_topic", "");
     this->declare_parameter<float>("wheelbase", wheelbase);
     this->declare_parameter<float>("heading_err_rate", heading_err_rate);
+    this->declare_parameter<float>("cross_track_err_rate", cross_track_err_rate);
     this->get_parameter("waypoint_topic", waypoint_topic);
     this->get_parameter("wheelbase", wheelbase);
     this->get_parameter("heading_err_rate", heading_err_rate);
+    this->get_parameter("cross_track_err_rate", cross_track_err_rate);
 
     goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/lexus3/cmd_vel", 10);
     reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("/lexus3/control_reinit", 10);
@@ -91,12 +93,12 @@ private:
     float alpha = atan2(goal_y, goal_x);
     float lookahead_distance = sqrt(pow(goal_x, 2) + pow(goal_y, 2));
     // cross-track error
-    float cross_track_error = atan2(2.0 * wheelbase * sin(alpha) / (lookahead_distance), 1);
-    cross_track_error += cur_cross_track_err * cross_track_err_rate;
+    float purs_steering_angle = atan2(2.0 * wheelbase * sin(alpha) / (lookahead_distance), 1);
+    float cross_track_error = cur_cross_track_err * cross_track_err_rate;
     // heading error
     float heading_error = goal_yaw * heading_err_rate;
-    // RCLCPP_INFO_STREAM(this->get_logger(), "heading: " << std::fixed << std::setprecision(2) << goal_yaw << ", cross-track: " << cross_track_error);
-    return cross_track_error + heading_error;
+    //RCLCPP_INFO_STREAM(this->get_logger(), "heading: " << std::fixed << std::setprecision(2) << goal_yaw << ", cross-track: " << cross_track_error << ", cross-track abs: " << cur_cross_track_abs << " purs_steering_angle" << purs_steering_angle);
+    return purs_steering_angle + cross_track_error + heading_error;
   }
 
   void speedCallback(const std_msgs::msg::Float32 &msg) const
@@ -120,6 +122,7 @@ private:
   void metricsCallback(const std_msgs::msg::Float32MultiArray &metrics_arr)
   {
     cur_cross_track_err = metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED];
+    //cur_cross_track_abs = metrics_arr.data[common_wpt::CUR_LAT_DIST_ABS];
   }
 
   void timerLoop()
@@ -144,6 +147,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   float wheelbase = 2.789; // Lexus3
   float cur_cross_track_err = 0.0;
+  //float cur_cross_track_abs = 0.0;
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
   float heading_err_rate = 1.0; // TODO: tune
   float cross_track_err_rate = 1.0; // TODO: tune
