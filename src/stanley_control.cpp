@@ -7,6 +7,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/color_rgba.hpp"
 #include "std_msgs/msg/float32.hpp"
+#include "std_msgs/msg/float32_multi_array.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
@@ -18,6 +19,8 @@
 
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
+
+#include "wayp_plan_tools/common.hpp"
 
 std::string waypoint_topic = "/lexus3/pursuitgoal";
 geometry_msgs::msg::Twist pursuit_vel;
@@ -48,6 +51,10 @@ class StanleyControl : public rclcpp::Node
       {
         heading_err_rate = param.as_double();
       }
+      if(param.get_name() == "cross_track_err_rate")
+      {
+        cross_track_err_rate = param.as_double();
+      }
     }
     return result;
   }
@@ -67,6 +74,7 @@ public:
     reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("/lexus3/control_reinit", 10);
     sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&StanleyControl::waypointCallback, this, _1));
     sub_s_ = this->create_subscription<std_msgs::msg::Float32>("/lexus3/pursuitspeedtarget", 10, std::bind(&StanleyControl::speedCallback, this, _1));
+    sub_m_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("lexus3/metrics_wayp", 10, std::bind(&StanleyControl::metricsCallback, this, _1));
     timer_ = this->create_wall_timer(50ms, std::bind(&StanleyControl::timerLoop, this));
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&StanleyControl::parametersCallback, this, std::placeholders::_1));
     std::this_thread::sleep_for(600ms);
@@ -84,8 +92,10 @@ private:
     float lookahead_distance = sqrt(pow(goal_x, 2) + pow(goal_y, 2));
     // cross-track error
     float cross_track_error = atan2(2.0 * wheelbase * sin(alpha) / (lookahead_distance), 1);
+    cross_track_error += cur_cross_track_err * cross_track_err_rate;
     // heading error
     float heading_error = goal_yaw * heading_err_rate;
+    // RCLCPP_INFO_STREAM(this->get_logger(), "heading: " << std::fixed << std::setprecision(2) << goal_yaw << ", cross-track: " << cross_track_error);
     return cross_track_error + heading_error;
   }
 
@@ -106,6 +116,12 @@ private:
     m.getRPY(goal_roll, goal_pitch, goal_yaw);
     pursuit_vel.angular.z = calcStanley(msg.poses[0].position.x, msg.poses[0].position.y, goal_yaw);
   }
+
+  void metricsCallback(const std_msgs::msg::Float32MultiArray &metrics_arr)
+  {
+    cur_cross_track_err = metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED];
+  }
+
   void timerLoop()
   {
     // RCLCPP_INFO_STREAM(this->get_logger(), "timer");
@@ -121,13 +137,16 @@ private:
 
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_w_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_s_;
+  rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_m_;
   // parameters
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr goal_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reinit_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   float wheelbase = 2.789; // Lexus3
+  float cur_cross_track_err = 0.0;
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
   float heading_err_rate = 1.0; // TODO: tune
+  float cross_track_err_rate = 1.0; // TODO: tune
 };
 
 int main(int argc, char **argv)

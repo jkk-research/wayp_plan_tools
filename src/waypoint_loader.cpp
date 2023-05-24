@@ -34,6 +34,7 @@
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
@@ -43,14 +44,32 @@ using std::placeholders::_1;
 
 class WaypointLoader : public rclcpp::Node
 {
+  rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters)
+  {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    result.reason = "success";
+    for (const auto &param : parameters)
+    {
+      RCLCPP_INFO_STREAM(this->get_logger(), "Param update: " << param.get_name().c_str() << ": " << param.value_to_string().c_str());
+      if (param.get_name() == "speed_marker_unit")
+      {
+        speed_marker_unit = param.as_string();
+      }
+    }
+    return result;
+  }
+
 public:
   WaypointLoader() : Node("waypoint_loader_node")
   {
     this->declare_parameter<std::string>("file_dir", "");
     this->declare_parameter<std::string>("file_name", "");
     this->declare_parameter<std::string>("waypoint_topic", "");
+    this->declare_parameter<std::string>("speed_marker_unit", "kmph");
     this->get_parameter("file_dir", file_dir);
     this->get_parameter("file_name", file_name);
+    this->get_parameter("speed_marker_unit", speed_marker_unit);
     multi_file_path_.clear();
     /*
     if (file_name.empty())
@@ -67,6 +86,7 @@ public:
     speed_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("lexus3/waypointarray_speeds", 1);
     mark_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("lexus3/waypointarray_marker", 1);
     timer_ = this->create_wall_timer(500ms, std::bind(&WaypointLoader::timer_callback, this));
+    callback_handle_ = this->add_on_set_parameters_callback(std::bind(&WaypointLoader::parametersCallback, this, std::placeholders::_1));
     RCLCPP_INFO_STREAM(this->get_logger(), "Loaded file: " << file_dir << "/" << file_name << " ");
   }
 
@@ -267,7 +287,18 @@ private:
         text_elem.color.b = 0.537;
         text_elem.color.a = 1.0;
         std::stringstream stream;
-        stream << std::fixed << std::setprecision(1) << speeds[id] * 3.6 << " km/h";
+        if (speed_marker_unit == "mps") // Meter per second (m/s)
+        {
+          stream << std::fixed << std::setprecision(1) << speeds[id] << " m/s";
+        }
+        else if (speed_marker_unit == "mph") // Miles per hour (mph)
+        {
+          stream << std::fixed << std::setprecision(1) << speeds[id] * 2.23694 << " mph";
+        }
+        else // Kilometer per hour (km/h)
+        {
+          stream << std::fixed << std::setprecision(1) << speeds[id] * 3.6 << " km/h";
+        }
         text_elem.text = stream.str();
         text_elem.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
         text_elem.action = visualization_msgs::msg::Marker::ADD;
@@ -285,7 +316,7 @@ private:
 
   void timer_callback()
   {
-    //RCLCPP_INFO(this->get_logger(), "timer");
+    // RCLCPP_INFO(this->get_logger(), "timer");
     for (const auto &el : multi_file_path_)
     {
       pubLaneWaypoint(el);
@@ -295,8 +326,9 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr lane_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr speed_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr mark_pub_;
+  OnSetParametersCallbackHandle::SharedPtr callback_handle_;
   std::vector<std::string> multi_file_path_;
-  std::string file_dir, file_name;
+  std::string file_dir, file_name, speed_marker_unit;
   double interval_ = 0.4;
   bool topic_based_saving; // topic or transform (tf) based saving
   geometry_msgs::msg::PoseArray lane_array;
