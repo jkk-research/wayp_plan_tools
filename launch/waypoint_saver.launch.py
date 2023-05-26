@@ -15,9 +15,14 @@ def generate_launch_description():
             name='wayp_saver',
             output='screen',
             parameters=[
-                {"file_dir": "/mnt/bag/waypoints/"},
+                {"file_dir": pkg_dir + "/csv"},
                 #{"file_dir": "/mnt/c/waypoints"},
-                #{"file_dir": pkg_dir + "/csv"},
-                {"file_name": "gyor1.csv"}],
+                {"file_name": "saved_waypoints1.csv"},
+                #{"topic_based_saving": True}, # False default (which is tf based)
+                #{"pose_topic": "/odom"},
+                #{"pose_topic_type": "Odometry"},
+                #{"tf_frame_id", "map"},
+                #{"tf_child_frame_id", "lexus3/base_link"},
+            ],
         )
     ])

@@ -1,8 +1,8 @@
 # `wayp_plan_tools` `ROS 2` package
-Waypoint and planner tools for `ROS 2` with mininal dependencies.
+Waypoint and planner tools for `ROS 2` with minimal dependencies.
 
 Planner / control nodes:
-- `single_goal_pursuit`: Pure pursuit (for vehicles / robots), a simlpe cross-track error method
+- `single_goal_pursuit`: Pure pursuit (for vehicles / robots), a simple cross-track error method
 - `multiple_goal_pursuit`: Multiple goal pursuit for vehicles / robots an implementation of our [paper](https://hjic.mk.uni-pannon.hu/index.php/hjic/article/view/914)
 - `stanley_control`: Stanley controller, a heading error + cross-track error method
 - `follow_the_carrot`: Follow-the-carrot, the simplest controller
@@ -10,7 +10,7 @@ Planner / control nodes:
 Waypoint nodes:
 - `waypoint_saver`: saves the waypoints to a csv
 - `waypoint_loader`: loads the waypoints from a csv to a ROS 2 topic
-- `waypoint_to_target`: translates the global waypoint array to local target waypoint(s), thus it makes possible to use the contoller nodes in a standalone way
+- `waypoint_to_target`: translates the global waypoint array to local target waypoint(s), thus it makes possible to use the controller nodes in a standalone way
 
 
 ## Build
@@ -43,15 +43,17 @@ In this project the `single_goal_pursuit`, the `multiple_goal_pursuit`, `stanley
 
 # `single_goal_pursuit` node
 The "classic" pure pursuit implementation
+![](csv/control_pure_pursuit01.svg)
 
 # `multiple_goal_pursuit` node 
 Multiple goal pursuit for vehicles / robots, an implementation of our [paper](https://hjic.mk.uni-pannon.hu/index.php/hjic/article/view/914)
 
 # `follow_the_carrot` node
 Follow-the-carrot, the simplest controller
+![](csv/control_follow_the_carrot01.svg)
 
 # `waypoint_to_target` node
-Reads the waypoint array and speeds, from that it creates single or mutliple goal points.
+Reads the waypoint array and speeds, from that it creates single or multiple goal points.
 
 It also provides a `/metrics_wayp` array topic with the following  elements:
 

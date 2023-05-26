@@ -26,6 +26,7 @@
 #include <sstream>
 
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
 #include "std_msgs/msg/color_rgba.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
@@ -86,6 +87,7 @@ public:
     speed_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("lexus3/waypointarray_speeds", 1);
     mark_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("lexus3/waypointarray_marker", 1);
     timer_ = this->create_wall_timer(500ms, std::bind(&WaypointLoader::timer_callback, this));
+    sub_reinit_ = this->create_subscription<std_msgs::msg::Bool>("/lexus3/control_reinit", 10, std::bind(&WaypointLoader::reinitCallback, this, _1));
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&WaypointLoader::parametersCallback, this, std::placeholders::_1));
     RCLCPP_INFO_STREAM(this->get_logger(), "Loaded file: " << file_dir << "/" << file_name << " ");
   }
@@ -237,26 +239,30 @@ private:
 
   void pubLaneWaypoint(const std::string &file_path)
   {
-    if (!verifyFileConsistency(file_path.c_str()))
-    {
-      RCLCPP_DEBUG_STREAM(this->get_logger(), "lane data is something wrong...");
-      return;
-    }
+    if (reinit){
+      // clear wps_c and speeds_c, these will be filled with new data from file
+      wps_c.clear();
+      speeds_c.clear();
+      if (!verifyFileConsistency(file_path.c_str()))
+      {
+        RCLCPP_WARN_STREAM(this->get_logger(), "lane data is something wrong...");
+        return;
+      }
 
-    RCLCPP_DEBUG_STREAM(this->get_logger(), "lane data is valid. publishing...");
-    std::vector<geometry_msgs::msg::Pose> wps;
-    std::vector<float> speeds;
+      RCLCPP_INFO_STREAM(this->get_logger(), "lane data is valid. publishing...");
+      loadWaypointsForVer3(file_path.c_str(), &wps_c, &speeds_c);
+      reinit = false;
+    }
     std_msgs::msg::Float32MultiArray speed_array;
     geometry_msgs::msg::PoseArray wp_array;
     visualization_msgs::msg::MarkerArray mark_array;
-    loadWaypointsForVer3(file_path.c_str(), &wps, &speeds);
-    // load speeds to speed_array
-    for (std::vector<float>::iterator it = speeds.begin(); it != speeds.end(); ++it)
+    // load speeds_c to speed_array
+    for (std::vector<float>::iterator it = speeds_c.begin(); it != speeds_c.end(); ++it)
     {
       speed_array.data.push_back(*it);
     }
     int id = 0;
-    for (std::vector<geometry_msgs::msg::Pose>::iterator it = wps.begin(); it != wps.end(); ++it)
+    for (std::vector<geometry_msgs::msg::Pose>::iterator it = wps_c.begin(); it != wps_c.end(); ++it)
     {
       wp_array.poses.push_back(*it);
       visualization_msgs::msg::Marker mark_elem;
@@ -267,7 +273,7 @@ private:
       mark_elem.scale.x = 1.0;
       mark_elem.scale.y = 0.4;
       mark_elem.scale.z = 0.6;
-      mark_elem.color = getColor(speeds[id]);
+      mark_elem.color = getColor(speeds_c[id]);
       mark_elem.type = visualization_msgs::msg::Marker::CUBE;
       mark_elem.action = visualization_msgs::msg::Marker::ADD;
       mark_elem.pose = *it;
@@ -289,15 +295,15 @@ private:
         std::stringstream stream;
         if (speed_marker_unit == "mps") // Meter per second (m/s)
         {
-          stream << std::fixed << std::setprecision(1) << speeds[id] << " m/s";
+          stream << std::fixed << std::setprecision(1) << speeds_c[id] << " m/s";
         }
         else if (speed_marker_unit == "mph") // Miles per hour (mph)
         {
-          stream << std::fixed << std::setprecision(1) << speeds[id] * 2.23694 << " mph";
+          stream << std::fixed << std::setprecision(1) << speeds_c[id] * 2.23694 << " mph";
         }
         else // Kilometer per hour (km/h)
         {
-          stream << std::fixed << std::setprecision(1) << speeds[id] * 3.6 << " km/h";
+          stream << std::fixed << std::setprecision(1) << speeds_c[id] * 3.6 << " km/h";
         }
         text_elem.text = stream.str();
         text_elem.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
@@ -314,6 +320,11 @@ private:
     mark_pub_->publish(mark_array);
   }
 
+  void reinitCallback(const std_msgs::msg::Bool &msg)
+  {
+      reinit = msg.data;
+  }
+
   void timer_callback()
   {
     // RCLCPP_INFO(this->get_logger(), "timer");
@@ -326,12 +337,16 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr lane_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr speed_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr mark_pub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_reinit_;  
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
   std::vector<std::string> multi_file_path_;
   std::string file_dir, file_name, speed_marker_unit;
   double interval_ = 0.4;
   bool topic_based_saving; // topic or transform (tf) based saving
+  bool reinit = true;
   geometry_msgs::msg::PoseArray lane_array;
+  std::vector<geometry_msgs::msg::Pose> wps_c;
+  std::vector<float> speeds_c;
 };
 
 int main(int argc, char **argv)
