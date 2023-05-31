@@ -69,6 +69,7 @@ public:
     WaypointToTarget() : Node("waypoint_to_target_node")
     {
         metrics_arr.data.resize(common_wpt::NOT_USED_YET); // initialize the metrics array
+        pursuit_vizu_arr.markers.resize(3); // initialize visualization
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         // Call timer_callback function 20 Hz, 50 milliseconds
@@ -95,7 +96,7 @@ public:
             waypoint_topic = "/lexus3/waypointarray";
         }
 
-        goal_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("lexus3/pursuittarget_marker", 10);
+        goal_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("lexus3/pursuitviz", 10);
         speed_pub_ = this->create_publisher<std_msgs::msg::Float32>("lexus3/pursuitspeedtarget", 10);
         target_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("lexus3/targetpoints", 10);
         metrics_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("lexus3/metrics_wayp", 10);
@@ -138,6 +139,7 @@ private:
     {
         target_pose_arr.poses.clear();
         pursuit_goal.header.frame_id = "lexus3/base_link";
+        pursuit_goal.texture.header.frame_id = "lexus3/base_link";
         pursuit_goal.header.stamp = this->now();
         pursuit_goal.ns = "pursuit_goal";
         pursuit_goal.id = 0;
@@ -152,6 +154,39 @@ private:
         pursuit_goal.color.a = 1.0;
         pursuit_goal.type = visualization_msgs::msg::Marker::CYLINDER;
         pursuit_goal.action = visualization_msgs::msg::Marker::MODIFY;
+        pursuit_closest.header.frame_id = "lexus3/base_link";
+        pursuit_closest.texture.header.frame_id = "lexus3/base_link";
+        pursuit_closest.header.stamp = this->now();
+        pursuit_closest.ns = "pursuit_closest";
+        pursuit_closest.id = 1;
+        pursuit_closest.scale.x = 1.2;
+        pursuit_closest.scale.y = 0.6;
+        pursuit_closest.scale.z = 2.8;
+        // https://github.com/jkk-research/colors
+        // md_pink_500 -- 0.91 0.12 0.39
+        pursuit_closest.color.r = 0.91;
+        pursuit_closest.color.g = 0.12;
+        pursuit_closest.color.b = 0.39;
+        pursuit_closest.color.a = 1.0;
+        pursuit_closest.type = visualization_msgs::msg::Marker::CYLINDER;
+        pursuit_closest.action = visualization_msgs::msg::Marker::MODIFY;        
+        cross_track_marker.header.frame_id = "lexus3/base_link";
+        cross_track_marker.texture.header.frame_id = "lexus3/base_link";
+        cross_track_marker.header.stamp = this->now();
+        cross_track_marker.ns = "cross_track_marker";
+        cross_track_marker.id = 2;
+        cross_track_marker.scale.x = 0.8;
+        cross_track_marker.scale.y = 0.8;
+        cross_track_marker.scale.z = 1.8;
+        // https://github.com/jkk-research/colors
+        // md_amber_500 -- 1.00 0.76 0.03
+        cross_track_marker.color.r = 1.00;
+        cross_track_marker.color.g = 0.76;
+        cross_track_marker.color.b = 0.03;
+        cross_track_marker.color.a = 1.0;
+        cross_track_marker.pose.position.z = 1.8;
+        cross_track_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+        cross_track_marker.action = visualization_msgs::msg::Marker::MODIFY;        
         int target_waypoint = 0;                 // target waypoint to be published
         int first_wp = 0;                        // first waypoint in the trajectory
         int last_wp = int(msg.poses.size() - 1); // last waypoint in the trajectory
@@ -217,12 +252,15 @@ private:
         metrics_arr.data[common_wpt::CUR_WAYPOINT_ID] = closest_waypoint;
         metrics_arr.data[common_wpt::AVG_LAT_DISTANCE] = average_distance;
         float lat_dist = msg.poses[closest_waypoint].position.x - current_pose.position.x;
+        float smallest_curr_signed_dist;
         if(lat_dist < 0)
         {
             metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED] = smallest_curr_distance; 
+            smallest_curr_signed_dist = smallest_curr_distance;
         }
         else{
             metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED] = -1.0 * smallest_curr_distance; 
+            smallest_curr_signed_dist = -1.0 * smallest_curr_distance;
         }
         // calculate the adaptive lookahead distance
         double lookahead_actual = calcLookahead(speed_msg.data);
@@ -267,16 +305,27 @@ private:
         }
         pursuit_goal.pose.position = msg.poses[target_waypoint].position;
         pursuit_goal.pose.orientation = msg.poses[target_waypoint].orientation;
+        pursuit_closest.pose.position = msg.poses[closest_waypoint].position;
+        pursuit_closest.pose.orientation = msg.poses[closest_waypoint].orientation;        
         geometry_msgs::msg::Pose pose_global; // a pose to put in the target_pose array
         pose_global.position = msg.poses[target_waypoint].position;
         pose_global.orientation = msg.poses[target_waypoint].orientation;
         // doTransform target_pose[0] to local frame
-        geometry_msgs::msg::Pose target_pose_local, pursuit_goal_local;
+        geometry_msgs::msg::Pose target_pose_local, pursuit_goal_local, pursuit_closest_local;
         tf2::doTransform(pose_global, target_pose_local, transformInverse);
         tf2::doTransform(pursuit_goal.pose, pursuit_goal_local, transformInverse);
+        tf2::doTransform(pursuit_closest.pose, pursuit_closest_local, transformInverse);
         pursuit_goal.pose.position = pursuit_goal_local.position;
         pursuit_goal.pose.orientation = pursuit_goal_local.orientation;
+        pursuit_closest.pose.position = pursuit_closest_local.position;
+        pursuit_closest.pose.orientation = pursuit_closest_local.orientation;        
         target_pose_arr.poses.push_back(target_pose_local);
+        std::stringstream stream;
+        stream << std::fixed << std::setprecision(1) << smallest_curr_signed_dist << " m";
+        cross_track_marker.text = stream.str();
+        pursuit_vizu_arr.markers[0] = pursuit_goal;
+        pursuit_vizu_arr.markers[1] = pursuit_closest;
+        pursuit_vizu_arr.markers[2] = cross_track_marker;
         // RCLCPP_INFO_STREAM(this->get_logger(), "transformInv: " << transformInverse.transform.translation.x << ", " << transformInverse.transform.translation.y << ", " << transformInverse.transform.translation.z);
     }
     void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
@@ -340,14 +389,14 @@ private:
     {
         // RCLCPP_INFO(this->get_logger(), "timer");
         getTransform();
-        goal_pub_->publish(pursuit_goal);
+        goal_pub_->publish(pursuit_vizu_arr);
         target_pub_->publish(target_pose_arr);
         speed_pub_->publish(speed_msg);
         metrics_pub_->publish(metrics_arr);
     }
 
     rclcpp::TimerBase::SharedPtr timer_;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr goal_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr speed_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr target_pub_;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr metrics_pub_;
@@ -375,7 +424,8 @@ private:
     bool traj_closed_loop = false; // Trajectory loop closure bool, if the trajectory is linear/open loop: false, if circular/cloded loop: true
     bool reinit = true;
     double static_speed;           // value of static speed in m/s
-    visualization_msgs::msg::Marker pursuit_goal;
+    visualization_msgs::msg::Marker pursuit_goal, pursuit_closest, cross_track_marker;
+    visualization_msgs::msg::MarkerArray pursuit_vizu_arr;
     geometry_msgs::msg::PoseArray target_pose_arr;
     std_msgs::msg::Float32 speed_msg;
 };
