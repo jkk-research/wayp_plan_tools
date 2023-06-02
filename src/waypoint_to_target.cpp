@@ -247,10 +247,19 @@ private:
         {
             average_distance = (average_distance * average_distance_count + smallest_curr_distance) / (average_distance_count + 1);
         }
+        // calculate the maximum distance
+        if (maximum_distance < smallest_curr_distance)
+        {
+            // only update the maximum distance if current distance makes sense (less than 100 m)
+            if (smallest_curr_distance < 100.0){
+                maximum_distance = smallest_curr_distance;
+            }
+        }
         average_distance_count += 1;
         metrics_arr.data[common_wpt::CUR_LAT_DIST_ABS] = smallest_curr_distance;
         metrics_arr.data[common_wpt::CUR_WAYPOINT_ID] = closest_waypoint;
         metrics_arr.data[common_wpt::AVG_LAT_DISTANCE] = average_distance;
+        metrics_arr.data[common_wpt::MAX_LAT_DISTANCE] = maximum_distance;
         float lat_dist = msg.poses[closest_waypoint].position.x - current_pose.position.x;
         float smallest_curr_signed_dist;
         if(lat_dist < 0)
@@ -414,7 +423,7 @@ private:
     double mps_alpha = 3.0;   // (3*3.6 = 10.8 km/h)
     double mps_beta = 5.0;    // (5*3.6 = 18 km/h)
     int closest_waypoint = 0; // closest waypoint to the current pose
-    float average_distance = 0.0;
+    float average_distance = 0.0, maximum_distance = 0.0;
     int average_distance_count = 0;
     geometry_msgs::msg::Pose current_pose;
     geometry_msgs::msg::TransformStamped transformInverse;

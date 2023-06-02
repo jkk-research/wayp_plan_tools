@@ -62,9 +62,10 @@ It also provides a `/metrics_wayp` array topic with the following  elements:
 |`[0]` | current lateral distance to the waypoint (signed, cross-track error) | `CUR_LAT_DIST_SIGNED`
 |`[1]` | current lateral distance to the waypoint (absolute value) | `CUR_LAT_DIST_ABS`
 |`[2]` | average lateral distance over time | `AVG_LAT_DISTANCE`
-|`[3]` | current waypoint ID | `CUR_WAYPOINT_ID`
-|`[4]` | target waypoint ID | `TRG_WAYPOINT_ID`
-|`[5]` | target waypoint longitudinal distance  | `TRG_WAY_LON_DIST`
+|`[3]` | maximum lateral distance over time | `MAX_LAT_DISTANCE`
+|`[4]` | current waypoint ID | `CUR_WAYPOINT_ID`
+|`[5]` | target waypoint ID | `TRG_WAYPOINT_ID`
+|`[6]` | target waypoint longitudinal distance  | `TRG_WAY_LON_DIST`
 
 <img src="csv/lookahead01.svg" width=60% />
 

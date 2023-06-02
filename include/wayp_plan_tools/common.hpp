@@ -14,6 +14,7 @@ namespace common_wpt
         CUR_LAT_DIST_SIGNED = 0, // current lateral distance to the waypoint (signed, cross-track error)
         CUR_LAT_DIST_ABS,        // current lateral distance to the waypoint (absolute value)
         AVG_LAT_DISTANCE,        // average lateral distance over time
+        MAX_LAT_DISTANCE,        // maximum lateral distance over time
         CUR_WAYPOINT_ID,         // current waypoint ID
         TRG_WAYPOINT_ID,         // target waypoint ID
         TRG_WAY_LON_DIST,        // target waypoint longitudinal distance
