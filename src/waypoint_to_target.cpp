@@ -89,20 +89,24 @@ public:
         this->get_parameter("static_speed", static_speed);
         this->declare_parameter<bool>("static_speed_enabled", false);
         this->get_parameter("static_speed_enabled", static_speed_enabled);
+        this->declare_parameter<std::string>("tf_frame_id", tf_frame_id);
+        this->get_parameter("tf_frame_id", tf_frame_id);
+        this->declare_parameter<std::string>("tf_child_frame_id", tf_child_frame_id);
+        this->get_parameter("tf_child_frame_id", tf_child_frame_id);
 
         if (waypoint_topic == "")
         {
-            RCLCPP_ERROR_STREAM(this->get_logger(), "waypoint_topic is not set using default value: /lexus3/waypointarray");
-            waypoint_topic = "/lexus3/waypointarray";
+            RCLCPP_ERROR_STREAM(this->get_logger(), "waypoint_topic is not set using default value: waypointarray");
+            waypoint_topic = "waypointarray";
         }
 
-        goal_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("lexus3/pursuitviz", 10);
-        speed_pub_ = this->create_publisher<std_msgs::msg::Float32>("lexus3/pursuitspeedtarget", 10);
-        target_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("lexus3/targetpoints", 10);
-        metrics_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("lexus3/metrics_wayp", 10);
+        goal_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("pursuitviz", 10);
+        speed_pub_ = this->create_publisher<std_msgs::msg::Float32>("pursuitspeedtarget", 10);
+        target_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("targetpoints", 10);
+        metrics_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("metrics_wayp", 10);
         sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&WaypointToTarget::waypointCallback, this, _1));
-        sub_s_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("lexus3/waypointarray_speeds", 10, std::bind(&WaypointToTarget::speedCallback, this, _1));
-        sub_reinit_ = this->create_subscription<std_msgs::msg::Bool>("/lexus3/control_reinit", 10, std::bind(&WaypointToTarget::reinitCallback, this, _1));
+        sub_s_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("waypointarray_speeds", 10, std::bind(&WaypointToTarget::speedCallback, this, _1));
+        sub_reinit_ = this->create_subscription<std_msgs::msg::Bool>("control_reinit", 10, std::bind(&WaypointToTarget::reinitCallback, this, _1));
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&WaypointToTarget::parametersCallback, this, std::placeholders::_1));
         RCLCPP_INFO_STREAM(this->get_logger(), "waypoint_to_target node started");
         RCLCPP_INFO_STREAM(this->get_logger(), "lookahead_min: " << lookahead_min << " lookahead_max: " << lookahead_max << " mps_alpha: " << mps_alpha << " mps_beta: " << mps_beta);
@@ -138,8 +142,8 @@ private:
     void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
     {
         target_pose_arr.poses.clear();
-        pursuit_goal.header.frame_id = "lexus3/base_link";
-        pursuit_goal.texture.header.frame_id = "lexus3/base_link";
+        pursuit_goal.header.frame_id = tf_frame_id;
+        pursuit_goal.texture.header.frame_id = tf_frame_id;
         pursuit_goal.header.stamp = this->now();
         pursuit_goal.ns = "pursuit_goal";
         pursuit_goal.id = 0;
@@ -154,8 +158,8 @@ private:
         pursuit_goal.color.a = 1.0;
         pursuit_goal.type = visualization_msgs::msg::Marker::CYLINDER;
         pursuit_goal.action = visualization_msgs::msg::Marker::MODIFY;
-        pursuit_closest.header.frame_id = "lexus3/base_link";
-        pursuit_closest.texture.header.frame_id = "lexus3/base_link";
+        pursuit_closest.header.frame_id = tf_frame_id;
+        pursuit_closest.texture.header.frame_id = tf_frame_id;
         pursuit_closest.header.stamp = this->now();
         pursuit_closest.ns = "pursuit_closest";
         pursuit_closest.id = 1;
@@ -170,8 +174,8 @@ private:
         pursuit_closest.color.a = 1.0;
         pursuit_closest.type = visualization_msgs::msg::Marker::CYLINDER;
         pursuit_closest.action = visualization_msgs::msg::Marker::MODIFY;        
-        cross_track_marker.header.frame_id = "lexus3/base_link";
-        cross_track_marker.texture.header.frame_id = "lexus3/base_link";
+        cross_track_marker.header.frame_id = tf_frame_id;
+        cross_track_marker.texture.header.frame_id = tf_frame_id;
         cross_track_marker.header.stamp = this->now();
         cross_track_marker.ns = "cross_track_marker";
         cross_track_marker.id = 2;
@@ -213,7 +217,7 @@ private:
         }
         // search for the closest waypoint within a search range (search_start, search_end)
         int search_start = closest_waypoint - 10;
-        int search_end = closest_waypoint + 10;
+        int search_end = closest_waypoint + 30;
         if (search_start < first_wp)
         {
             search_start = first_wp;
@@ -363,15 +367,15 @@ private:
         }
     }
 
-    // get tf2 transform from map to lexus3/base_link
+    // get tf2 transform from map to base_link
     void getTransform()
     {
         geometry_msgs::msg::TransformStamped transformStamped;
         try
         {
             // TODO: better way?
-            transformStamped = tf_buffer_->lookupTransform("map", "lexus3/base_link", tf2::TimePointZero);
-            transformInverse = tf_buffer_->lookupTransform("lexus3/base_link", "map", tf2::TimePointZero);
+            transformStamped = tf_buffer_->lookupTransform(tf_child_frame_id, tf_frame_id, tf2::TimePointZero);
+            transformInverse = tf_buffer_->lookupTransform(tf_frame_id, tf_child_frame_id, tf2::TimePointZero);
         }
 
         catch (const tf2::TransformException &ex)
@@ -417,8 +421,8 @@ private:
     std_msgs::msg::Float32MultiArray metrics_arr; // array of metrics (eg. current lateral distance, average lateral distance, current waypoint ID etc)
     OnSetParametersCallbackHandle::SharedPtr callback_handle_;
     // parameters
-    std::string waypoint_topic = "lexus3/waypointarray";
-    double lookahead_min = 8.5; // Lexus3 front from base_link: 2.789 + 1.08 = 3.869
+    std::string waypoint_topic = "waypointarray";
+    double lookahead_min = 8.5; // eg. Lexus3 front from base_link: 2.789 + 1.08 = 3.869
     double lookahead_max = lookahead_min + 15.0;
     double mps_alpha = 3.0;   // (3*3.6 = 10.8 km/h)
     double mps_beta = 5.0;    // (5*3.6 = 18 km/h)
@@ -436,6 +440,7 @@ private:
     visualization_msgs::msg::Marker pursuit_goal, pursuit_closest, cross_track_marker;
     visualization_msgs::msg::MarkerArray pursuit_vizu_arr;
     geometry_msgs::msg::PoseArray target_pose_arr;
+    std::string tf_child_frame_id, tf_frame_id;
     std_msgs::msg::Float32 speed_msg;
 };
 

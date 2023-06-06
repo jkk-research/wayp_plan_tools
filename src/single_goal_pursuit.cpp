@@ -20,7 +20,7 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 //#include "wayp_plan_tools/common.hpp"
 
-std::string waypoint_topic = "/lexus3/pursuitgoal";
+std::string waypoint_topic = "pursuitgoal";
 geometry_msgs::msg::Twist pursuit_vel;
 
 using namespace std::chrono_literals;
@@ -54,14 +54,16 @@ public:
   {
     RCLCPP_INFO_STREAM(this->get_logger(), "pure_pursuit_node started: ");
     this->declare_parameter<std::string>("waypoint_topic", "");
+    this->declare_parameter<std::string>("cmd_topic", cmd_topic);
     this->declare_parameter<float>("wheelbase", wheelbase);
     this->get_parameter("waypoint_topic", waypoint_topic);
+    this->get_parameter("cmd_topic", cmd_topic);
     this->get_parameter("wheelbase", wheelbase);
 
-    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/lexus3/cmd_vel", 10);
-    reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("/lexus3/control_reinit", 10);
+    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_topic, 10);
+    reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("control_reinit", 10);
     sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&SingleGoalPursuit::waypointCallback, this, _1));
-    sub_s_ = this->create_subscription<std_msgs::msg::Float32>("/lexus3/pursuitspeedtarget", 10, std::bind(&SingleGoalPursuit::speedCallback, this, _1));
+    sub_s_ = this->create_subscription<std_msgs::msg::Float32>("pursuitspeedtarget", 10, std::bind(&SingleGoalPursuit::speedCallback, this, _1));
     timer_ = this->create_wall_timer(50ms, std::bind(&SingleGoalPursuit::timerLoop, this));
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&SingleGoalPursuit::parametersCallback, this, std::placeholders::_1));
     std::this_thread::sleep_for(600ms);
@@ -108,7 +110,8 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr goal_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reinit_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
-  float wheelbase = 2.789; // Lexus3
+  float wheelbase = 2.789; // meter
+  std::string cmd_topic;
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 };
 

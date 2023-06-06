@@ -22,7 +22,7 @@
 
 #include "wayp_plan_tools/common.hpp"
 
-std::string waypoint_topic = "/lexus3/pursuitgoal";
+std::string waypoint_topic = "pursuitgoal";
 geometry_msgs::msg::Twist pursuit_vel;
 
 using namespace std::chrono_literals;
@@ -72,11 +72,11 @@ public:
     this->get_parameter("heading_err_rate", heading_err_rate);
     this->get_parameter("cross_track_err_rate", cross_track_err_rate);
 
-    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/lexus3/cmd_vel", 10);
-    reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("/lexus3/control_reinit", 10);
+    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+    reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("control_reinit", 10);
     sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&StanleyControl::waypointCallback, this, _1));
-    sub_s_ = this->create_subscription<std_msgs::msg::Float32>("/lexus3/pursuitspeedtarget", 10, std::bind(&StanleyControl::speedCallback, this, _1));
-    sub_m_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("lexus3/metrics_wayp", 10, std::bind(&StanleyControl::metricsCallback, this, _1));
+    sub_s_ = this->create_subscription<std_msgs::msg::Float32>("pursuitspeedtarget", 10, std::bind(&StanleyControl::speedCallback, this, _1));
+    sub_m_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("metrics_wayp", 10, std::bind(&StanleyControl::metricsCallback, this, _1));
     timer_ = this->create_wall_timer(50ms, std::bind(&StanleyControl::timerLoop, this));
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&StanleyControl::parametersCallback, this, std::placeholders::_1));
     std::this_thread::sleep_for(600ms);
@@ -145,7 +145,7 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr goal_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reinit_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
-  float wheelbase = 2.789; // Lexus3
+  float wheelbase = 2.789;
   float cur_cross_track_err = 0.0;
   float cur_cross_track_abs = 0.0;
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;

@@ -84,7 +84,11 @@ ros2 run wayp_plan_tools waypoint_loader --ros-args -p file_name:=tmp1.csv -p fi
 ```
 
 
+# Usage with a simulator
 
+Please refer to [github.com/jkk-research/sim_wayp_plan_tools](https://github.com/jkk-research/sim_wayp_plan_tools).
+
+![](https://raw.githubusercontent.com/jkk-research/sim_wayp_plan_tools/main/img/gz_rviz01.gif)
 
 # Cite & paper
 

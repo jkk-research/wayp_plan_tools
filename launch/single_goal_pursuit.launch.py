@@ -15,9 +15,9 @@ def generate_launch_description():
             name='pure_pursuit',
             output='screen',
             parameters=[
-                {"cmd_topic": "lexus3/cmd_vel"},
+                {"cmd_topic": "cmd_vel"},
                 {"wheelbase": 2.789},
-                {"waypoint_topic": "lexus3/targetpoints"},
-                ],
+                {"waypoint_topic": "targetpoints"},
+            ],
         )
     ])

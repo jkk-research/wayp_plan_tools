@@ -22,7 +22,7 @@ def generate_launch_description():
                 #{"pose_topic": "/odom"},
                 #{"pose_topic_type": "Odometry"},
                 #{"tf_frame_id", "map"},
-                #{"tf_child_frame_id", "lexus3/base_link"},
+                #{"tf_child_frame_id", "base_link"},
             ],
         )
     ])

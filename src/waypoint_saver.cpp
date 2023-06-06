@@ -29,6 +29,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/pose.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/pose_array.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 
 #include "tf2/LinearMath/Quaternion.h"
@@ -75,7 +76,7 @@ public:
         this->declare_parameter<std::string>("pose_topic_type", "");
         this->declare_parameter<bool>("topic_based_saving", false);
         this->declare_parameter<std::string>("tf_frame_id", "map");
-        this->declare_parameter<std::string>("tf_child_frame_id", "lexus3/base_link");
+        this->declare_parameter<std::string>("tf_child_frame_id", "base_link");
         this->get_parameter("file_dir", file_dir);
         this->get_parameter("file_name", file_name);
         this->get_parameter("pose_topic", pose_topic);
@@ -103,6 +104,10 @@ public:
             {
                 sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(pose_topic, 10, std::bind(&WaypointSaver::odometryCallback, this, _1));
             }
+            else if(pose_topic_type.compare("PoseArray") == 0)
+            {
+                sub_pose_array_ = this->create_subscription<geometry_msgs::msg::PoseArray>(pose_topic, 10, std::bind(&WaypointSaver::poseArrayCallback, this, _1));
+            }            
             else
             {
                 RCLCPP_ERROR_STREAM(this->get_logger(), "Topic type not supported"); // TODO: PoseWithCovarianceStamped, PoseWithCovariance, Pose
@@ -113,10 +118,11 @@ public:
         else
         {
             RCLCPP_INFO_STREAM(this->get_logger(), "Save to " << file_dir << "/" << file_name << " source: tf");
+            RCLCPP_INFO_STREAM(this->get_logger(), "tf_frame_id: " << tf_frame_id << " tf_child_frame_id: " << tf_child_frame_id);
             // Call on_timer function every 100 milliseconds
             timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&WaypointSaver::getTransform, this));
         }
-        sub_vehicle_speed_ = this->create_subscription<std_msgs::msg::Float32>("lexus3/vehicle_speed_kmph", 10, std::bind(&WaypointSaver::vehicleSpeedCallback, this, _1));
+        sub_vehicle_speed_ = this->create_subscription<std_msgs::msg::Float32>("vehicle_speed_kmph", 10, std::bind(&WaypointSaver::vehicleSpeedCallback, this, _1));
     }
 
 private:
@@ -154,6 +160,36 @@ private:
         }
     }
 
+    void poseArrayCallback(const geometry_msgs::msg::PoseArray &current_pose_arr)
+    {
+        // get second element of current_pose_arr array and print it
+
+
+
+        double distance = sqrt(pow((current_pose_arr.poses[1].position.x - previous_pose.position.x), 2) +
+                               pow((current_pose_arr.poses[1].position.y - previous_pose.position.y), 2));
+
+        //std::ofstream ofs((file_dir + "/" + file_name).c_str(), std::ios::app);
+        tf2::Quaternion q(
+            current_pose_arr.poses[1].orientation.x,
+            current_pose_arr.poses[1].orientation.y,
+            current_pose_arr.poses[1].orientation.z,
+            current_pose_arr.poses[1].orientation.w);
+        tf2::Matrix3x3 m(q);
+        double roll, pitch, yaw;
+        m.getRPY(roll, pitch, yaw);
+
+        // if car moves [interval] meter
+        if (distance >= interval_)
+        {
+            //RCLCPP_INFO_STREAM(this->get_logger(), "distance: " << std::fixed << std::setprecision(2) << distance);
+            RCLCPP_INFO_STREAM(this->get_logger(), "X Y yaw: " << std::fixed << std::setprecision(2) << current_pose_arr.poses[1].position.x << " " << current_pose_arr.poses[1].position.y << " " << yaw);
+            ofs << std::fixed << std::setprecision(4) << current_pose_arr.poses[1].position.x << "," << current_pose_arr.poses[1].position.y << "," << current_pose_arr.poses[1].position.z << "," << yaw << "," << speed_mps << ",0" << std::endl;
+            // update previous pose from values of current pose
+            previous_pose = current_pose_arr.poses[1];
+        }
+    }
+
     void odometryCallback(const nav_msgs::msg::Odometry &current_odom)
     {
         double distance = sqrt(pow((current_odom.pose.pose.position.x - previous_pose.position.x), 2) +
@@ -178,7 +214,7 @@ private:
         }
     }
 
-    // get tf2 transform from map to lexus3/base_link
+    // get tf2 transform from map to base_link
     void getTransform()
     {
         //RCLCPP_INFO_STREAM(this->get_logger(), "Speed: " << speed_mps << " m/s");
@@ -186,7 +222,7 @@ private:
         geometry_msgs::msg::TransformStamped transformStamped;
         try
         {
-            transformStamped = tf_buffer_->lookupTransform("map", "lexus3/base_link", tf2::TimePointZero); 
+            transformStamped = tf_buffer_->lookupTransform(tf_frame_id, tf_child_frame_id, tf2::TimePointZero); 
         }
         catch (const tf2::TransformException &ex)
         {
@@ -232,6 +268,7 @@ private:
     }
 
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_pose_stamped_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_pose_array_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom_;
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_vehicle_speed_;
     rclcpp::TimerBase::SharedPtr timer_{nullptr};

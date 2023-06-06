@@ -18,8 +18,8 @@
 
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
-
-std::string waypoint_topic = "/lexus3/pursuitgoal";
+  
+std::string waypoint_topic = "pursuitgoal";
 geometry_msgs::msg::Twist pursuit_vel;
 
 using namespace std::chrono_literals;
@@ -57,10 +57,10 @@ public:
     this->get_parameter("waypoint_topic", waypoint_topic);
     this->get_parameter("wheelbase", wheelbase);
 
-    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/lexus3/cmd_vel", 10);
-    reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("/lexus3/control_reinit", 10);
+    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+    reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("control_reinit", 10);
     sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&MultipleGoalPursuit::waypointCallback, this, _1));
-    sub_s_ = this->create_subscription<std_msgs::msg::Float32>("/lexus3/pursuitspeedtarget", 10, std::bind(&MultipleGoalPursuit::speedCallback, this, _1));
+    sub_s_ = this->create_subscription<std_msgs::msg::Float32>("pursuitspeedtarget", 10, std::bind(&MultipleGoalPursuit::speedCallback, this, _1));
     timer_ = this->create_wall_timer(50ms, std::bind(&MultipleGoalPursuit::timerLoop, this));
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&MultipleGoalPursuit::parametersCallback, this, std::placeholders::_1));
     std::this_thread::sleep_for(600ms);
@@ -87,7 +87,7 @@ private:
     // determine the size of the array, the number of goal points
     goalpoint_count = msg.poses.size();
     float sum_angle = 0;
-    for(int i = 0; i < goalpoint_count; i++)
+    for (int i = 0; i < goalpoint_count; i++)
     {
       sum_angle += calcPursuitAngle(msg.poses[i].position.x, msg.poses[i].position.y);
     }
@@ -113,9 +113,9 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr goal_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reinit_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
-  float wheelbase = 2.789; // Lexus3
+  float wheelbase = 2.789;
   int goalpoint_count = 1; // number of goal points
-  OnSetParametersCallbackHandle::SharedPtr callback_handle_; 
+  OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 };
 
 int main(int argc, char **argv)

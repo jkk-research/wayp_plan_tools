@@ -57,6 +57,10 @@ class WaypointLoader : public rclcpp::Node
       {
         speed_marker_unit = param.as_string();
       }
+      if(param.get_name() == "per_waypoint_display")
+      {
+        per_waypoint = param.as_int();
+      }
     }
     return result;
   }
@@ -68,9 +72,11 @@ public:
     this->declare_parameter<std::string>("file_name", "");
     this->declare_parameter<std::string>("waypoint_topic", "");
     this->declare_parameter<std::string>("speed_marker_unit", "kmph");
+    this->declare_parameter<int>("per_waypoint_display", per_waypoint); // // display speed text marker every Nth waypoint
     this->get_parameter("file_dir", file_dir);
     this->get_parameter("file_name", file_name);
     this->get_parameter("speed_marker_unit", speed_marker_unit);
+    this->get_parameter("per_waypoint_display", per_waypoint);
     multi_file_path_.clear();
     /*
     if (file_name.empty())
@@ -83,11 +89,11 @@ public:
     }
     */
     parseColumns((file_dir + "/" + file_name), &multi_file_path_);
-    lane_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("lexus3/waypointarray", 1);
-    speed_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("lexus3/waypointarray_speeds", 1);
-    mark_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("lexus3/waypointarray_marker", 1);
+    lane_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("waypointarray", 1);
+    speed_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("waypointarray_speeds", 1);
+    mark_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("waypointarray_marker", 1);
     timer_ = this->create_wall_timer(500ms, std::bind(&WaypointLoader::timer_callback, this));
-    sub_reinit_ = this->create_subscription<std_msgs::msg::Bool>("/lexus3/control_reinit", 10, std::bind(&WaypointLoader::reinitCallback, this, _1));
+    sub_reinit_ = this->create_subscription<std_msgs::msg::Bool>("control_reinit", 10, std::bind(&WaypointLoader::reinitCallback, this, _1));
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&WaypointLoader::parametersCallback, this, std::placeholders::_1));
     RCLCPP_INFO_STREAM(this->get_logger(), "Loaded file: " << file_dir << "/" << file_name << " ");
   }
@@ -245,7 +251,7 @@ private:
       speeds_c.clear();
       if (!verifyFileConsistency(file_path.c_str()))
       {
-        RCLCPP_WARN_STREAM(this->get_logger(), "lane data is something wrong...");
+        RCLCPP_WARN_STREAM(this->get_logger(), "something wrong with lane data...");
         return;
       }
 
@@ -275,19 +281,19 @@ private:
       mark_elem.scale.z = 0.6;
       mark_elem.color = getColor(speeds_c[id]);
       mark_elem.type = visualization_msgs::msg::Marker::CUBE;
-      mark_elem.action = visualization_msgs::msg::Marker::ADD;
+      mark_elem.action = visualization_msgs::msg::Marker::MODIFY;
       mark_elem.pose = *it;
       mark_array.markers.push_back(mark_elem);
-      if (id % 5 == 0)
+      if (id % per_waypoint == 0)
       {
         visualization_msgs::msg::Marker text_elem;
         text_elem.header.frame_id = "/map";
         text_elem.header.stamp = this->now();
         text_elem.ns = "speed_kmph";
         text_elem.id = id;
-        text_elem.scale.x = 1.0;
-        text_elem.scale.y = 0.4;
-        text_elem.scale.z = 0.6;
+        text_elem.scale.x = 0.2 * per_waypoint;
+        text_elem.scale.y = 0.1 * per_waypoint;
+        text_elem.scale.z = 0.1 * per_waypoint;
         text_elem.color.r = 0.149;
         text_elem.color.g = 0.588;
         text_elem.color.b = 0.537;
@@ -307,7 +313,7 @@ private:
         }
         text_elem.text = stream.str();
         text_elem.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-        text_elem.action = visualization_msgs::msg::Marker::ADD;
+        text_elem.action = visualization_msgs::msg::Marker::MODIFY;
         text_elem.pose = *it;
         text_elem.pose.position.z += 0.4;
         mark_array.markers.push_back(text_elem);
@@ -346,6 +352,7 @@ private:
   bool reinit = true;
   geometry_msgs::msg::PoseArray lane_array;
   std::vector<geometry_msgs::msg::Pose> wps_c;
+  unsigned int per_waypoint = 5; // display speed text marker every 5th waypoint
   std::vector<float> speeds_c;
 };
 

@@ -15,8 +15,14 @@ def generate_launch_description():
             name='wayp_to_target',
             output='screen',
             parameters=[
-                {"lookahead_distance": 3.0}
-                ],
+                {"lookahead_min": 8.5},
+                {"lookahead_max": 12.0},
+                {"mps_alpha": 3.5},
+                {"mps_beta": 5.5}, 
+                {"waypoint_topic": "waypointarray"},
+                {"tf_frame_id": "base_link"},
+                {"tf_child_frame_id": "map"},                
+            ],
         ),
 
         Node(
@@ -27,7 +33,9 @@ def generate_launch_description():
             parameters=[
                 #{"file_dir": "/mnt/c/waypoints"},
                 {"file_dir": pkg_dir + "/csv"},
-                {"file_name": "example01.csv"}],
+                {"file_name": "example01.csv"}
+                {"per_waypoint_display": 10}, # display speed every 10th waypoint 
+            ],
         ),
 
 
@@ -37,8 +45,8 @@ def generate_launch_description():
             name='pure_pursuit',
             output='screen',
             parameters=[
-                {"cmd_topic": "lexus3/cmd_vel"},
-                {"wheelbase": 2.789}
-                ],
+                {"cmd_topic": "cmd_vel"},
+                {"wheelbase": 2.789},
+            ],
         )
     ])
