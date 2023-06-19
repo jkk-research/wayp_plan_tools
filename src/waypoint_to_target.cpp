@@ -69,7 +69,7 @@ public:
     WaypointToTarget() : Node("waypoint_to_target_node")
     {
         metrics_arr.data.resize(common_wpt::NOT_USED_YET); // initialize the metrics array
-        pursuit_vizu_arr.markers.resize(3); // initialize visualization
+        pursuit_vizu_arr.markers.resize(3);                // initialize visualization
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         // Call timer_callback function 20 Hz, 50 milliseconds
@@ -173,7 +173,7 @@ private:
         pursuit_closest.color.b = 0.39;
         pursuit_closest.color.a = 1.0;
         pursuit_closest.type = visualization_msgs::msg::Marker::CYLINDER;
-        pursuit_closest.action = visualization_msgs::msg::Marker::MODIFY;        
+        pursuit_closest.action = visualization_msgs::msg::Marker::MODIFY;
         cross_track_marker.header.frame_id = tf_frame_id;
         cross_track_marker.texture.header.frame_id = tf_frame_id;
         cross_track_marker.header.stamp = this->now();
@@ -190,7 +190,7 @@ private:
         cross_track_marker.color.a = 1.0;
         cross_track_marker.pose.position.z = 1.8;
         cross_track_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-        cross_track_marker.action = visualization_msgs::msg::Marker::MODIFY;        
+        cross_track_marker.action = visualization_msgs::msg::Marker::MODIFY;
         int target_waypoint = 0;                 // target waypoint to be published
         int first_wp = 0;                        // first waypoint in the trajectory
         int last_wp = int(msg.poses.size() - 1); // last waypoint in the trajectory
@@ -227,7 +227,7 @@ private:
             search_end = last_wp;
         }
         // if got a reinit signal, search in the whole trajectory
-        if(reinit == true)
+        if (reinit == true)
         {
             search_start = first_wp;
             search_end = last_wp;
@@ -255,7 +255,8 @@ private:
         if (maximum_distance < smallest_curr_distance)
         {
             // only update the maximum distance if current distance makes sense (less than 100 m)
-            if (smallest_curr_distance < 100.0){
+            if (smallest_curr_distance < 100.0)
+            {
                 maximum_distance = smallest_curr_distance;
             }
         }
@@ -264,17 +265,6 @@ private:
         metrics_arr.data[common_wpt::CUR_WAYPOINT_ID] = closest_waypoint;
         metrics_arr.data[common_wpt::AVG_LAT_DISTANCE] = average_distance;
         metrics_arr.data[common_wpt::MAX_LAT_DISTANCE] = maximum_distance;
-        float lat_dist = msg.poses[closest_waypoint].position.x - current_pose.position.x;
-        float smallest_curr_signed_dist;
-        if(lat_dist < 0)
-        {
-            metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED] = smallest_curr_distance; 
-            smallest_curr_signed_dist = smallest_curr_distance;
-        }
-        else{
-            metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED] = -1.0 * smallest_curr_distance; 
-            smallest_curr_signed_dist = -1.0 * smallest_curr_distance;
-        }
         // calculate the adaptive lookahead distance
         double lookahead_actual = calcLookahead(speed_msg.data);
 
@@ -319,7 +309,7 @@ private:
         pursuit_goal.pose.position = msg.poses[target_waypoint].position;
         pursuit_goal.pose.orientation = msg.poses[target_waypoint].orientation;
         pursuit_closest.pose.position = msg.poses[closest_waypoint].position;
-        pursuit_closest.pose.orientation = msg.poses[closest_waypoint].orientation;        
+        pursuit_closest.pose.orientation = msg.poses[closest_waypoint].orientation;
         geometry_msgs::msg::Pose pose_global; // a pose to put in the target_pose array
         pose_global.position = msg.poses[target_waypoint].position;
         pose_global.orientation = msg.poses[target_waypoint].orientation;
@@ -331,8 +321,29 @@ private:
         pursuit_goal.pose.position = pursuit_goal_local.position;
         pursuit_goal.pose.orientation = pursuit_goal_local.orientation;
         pursuit_closest.pose.position = pursuit_closest_local.position;
-        pursuit_closest.pose.orientation = pursuit_closest_local.orientation;        
+        pursuit_closest.pose.orientation = pursuit_closest_local.orientation;
         target_pose_arr.poses.push_back(target_pose_local);
+        double local_cw_roll, local_cw_pitch, local_cw_yaw, smallest_curr_signed_dist;
+        tf2::Quaternion q_local(
+            pursuit_closest_local.orientation.x,
+            pursuit_closest_local.orientation.y,
+            pursuit_closest_local.orientation.z,
+            pursuit_closest_local.orientation.w);
+        tf2::Matrix3x3 m(q_local);
+        m.getRPY(local_cw_roll, local_cw_pitch, local_cw_yaw);
+        if (local_cw_yaw > 1.309 or local_cw_yaw < -1.309) // 75 deg = 1.309 rad
+        {
+            RCLCPP_WARN_STREAM(this->get_logger(), "Current waypoint orientation is more than 75 deg [" << std::fixed << std::setprecision(1) << local_cw_yaw * 180 / M_PI << "deg]");
+        }
+        if (pursuit_closest_local.position.y < 0)
+        {
+            smallest_curr_signed_dist = smallest_curr_distance;
+        }
+        else
+        {
+            smallest_curr_signed_dist = smallest_curr_distance * -1.0;
+        }
+        metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED] = smallest_curr_signed_dist;
         std::stringstream stream;
         stream << std::fixed << std::setprecision(1) << smallest_curr_signed_dist << " m";
         cross_track_marker.text = stream.str();
@@ -436,7 +447,7 @@ private:
     bool static_speed_enabled = false;
     bool traj_closed_loop = false; // Trajectory loop closure bool, if the trajectory is linear/open loop: false, if circular/cloded loop: true
     bool reinit = true;
-    double static_speed;           // value of static speed in m/s
+    double static_speed; // value of static speed in m/s
     visualization_msgs::msg::Marker pursuit_goal, pursuit_closest, cross_track_marker;
     visualization_msgs::msg::MarkerArray pursuit_vizu_arr;
     geometry_msgs::msg::PoseArray target_pose_arr;
