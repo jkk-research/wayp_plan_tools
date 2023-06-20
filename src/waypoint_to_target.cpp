@@ -337,11 +337,11 @@ private:
         }
         if (pursuit_closest_local.position.y < 0)
         {
-            smallest_curr_signed_dist = smallest_curr_distance;
+            smallest_curr_signed_dist = smallest_curr_distance * -1.0;
         }
         else
         {
-            smallest_curr_signed_dist = smallest_curr_distance * -1.0;
+            smallest_curr_signed_dist = smallest_curr_distance;
         }
         metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED] = smallest_curr_signed_dist;
         std::stringstream stream;

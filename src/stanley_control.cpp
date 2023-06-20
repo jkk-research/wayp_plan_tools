@@ -67,6 +67,7 @@ public:
     rcl_interfaces::msg::ParameterDescriptor descriptor_slider;
     rcl_interfaces::msg::FloatingPointRange range;
     descriptor_slider.read_only = false;
+    descriptor_slider.type = rclcpp::ParameterType::PARAMETER_DOUBLE;
     descriptor_slider.description = "Slider parameter";
     range.set__from_value(-0.1).set__to_value(1.6).set__step(0.05);
     descriptor_slider.floating_point_range = {range};
@@ -102,11 +103,11 @@ private:
     float alpha = atan2(goal_y, goal_x);
     float lookahead_distance = sqrt(pow(goal_x, 2) + pow(goal_y, 2));
     // cross-track error
-    float purs_steering_angle = atan2(2.0 * wheelbase * sin(alpha) / (lookahead_distance), 1);
+    float purs_steering_angle = atan2(2.0 * wheelbase * sin(alpha), lookahead_distance);
     float cross_track_error = cur_cross_track_err * cross_track_err_rate;
     // heading error
     float heading_error = goal_yaw * heading_err_rate;
-    // RCLCPP_INFO_STREAM(this->get_logger(), "heading: " << std::fixed << std::setprecision(2) << goal_yaw << ", cross-track: " << cross_track_error << ", cross-track abs: " << cur_cross_track_abs << " purs_steering_angle" << purs_steering_angle);
+    RCLCPP_INFO_STREAM(this->get_logger(), "purs: " << std::fixed << std::setprecision(2) << purs_steering_angle << ", crosstrackE: " << cross_track_error << ", headingE: " << heading_error);
     return purs_steering_angle + cross_track_error + heading_error;
   }
 
