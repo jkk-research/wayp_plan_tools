@@ -322,6 +322,7 @@ private:
         pursuit_goal.pose.orientation = pursuit_goal_local.orientation;
         pursuit_closest.pose.position = pursuit_closest_local.position;
         pursuit_closest.pose.orientation = pursuit_closest_local.orientation;
+        target_pose_arr.header.stamp = this->now();
         target_pose_arr.poses.push_back(target_pose_local);
         double local_cw_roll, local_cw_pitch, local_cw_yaw, smallest_curr_signed_dist;
         tf2::Quaternion q_local(

@@ -69,18 +69,20 @@ public:
     descriptor_slider.read_only = false;
     descriptor_slider.type = rclcpp::ParameterType::PARAMETER_DOUBLE;
     descriptor_slider.description = "Slider parameter";
-    range.set__from_value(-0.1).set__to_value(1.6).set__step(0.05);
+    range.set__from_value(-0.1).set__to_value(1.6);
     descriptor_slider.floating_point_range = {range};
     this->declare_parameter<std::string>("waypoint_topic", "");
     this->declare_parameter<std::string>("cmd_topic", cmd_topic);
     this->declare_parameter<float>("wheelbase", wheelbase);
     this->declare_parameter<float>("heading_err_rate", heading_err_rate, descriptor_slider);
+    this->declare_parameter<float>("pursuit_rate", pursuit_rate, descriptor_slider);
     this->declare_parameter<float>("cross_track_err_rate", cross_track_err_rate, descriptor_slider);
     this->get_parameter("waypoint_topic", waypoint_topic);
     this->get_parameter("cmd_topic", cmd_topic);
     this->get_parameter("wheelbase", wheelbase);
     this->get_parameter("heading_err_rate", heading_err_rate);
     this->get_parameter("cross_track_err_rate", cross_track_err_rate);
+    this->get_parameter("pursuit_rate", pursuit_rate);
 
     goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_topic, 10);
     reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("control_reinit", 10);
@@ -107,8 +109,8 @@ private:
     float cross_track_error = cur_cross_track_err * cross_track_err_rate;
     // heading error
     float heading_error = goal_yaw * heading_err_rate;
-    RCLCPP_INFO_STREAM(this->get_logger(), "purs: " << std::fixed << std::setprecision(2) << purs_steering_angle << ", crosstrackE: " << cross_track_error << ", headingE: " << heading_error);
-    return purs_steering_angle + cross_track_error + heading_error;
+    RCLCPP_INFO_STREAM(this->get_logger(), "purs: " << std::fixed << std::setprecision(2) << pursuit_rate * purs_steering_angle << ", crosstrackE: " << cross_track_error << ", headingE: " << heading_error);
+    return pursuit_rate * purs_steering_angle + cross_track_error + heading_error;
   }
 
   void speedCallback(const std_msgs::msg::Float32 &msg) const
@@ -160,8 +162,9 @@ private:
   float cur_cross_track_err = 0.0;
   float cur_cross_track_abs = 0.0;
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
-  float heading_err_rate = 1.0;     // TODO: tune
-  float cross_track_err_rate = 1.0; // TODO: tune
+  float heading_err_rate = 0.05;     // TODO: tune
+  float cross_track_err_rate = 0.05; // TODO: tune
+  float pursuit_rate = 0.9;          // TODO: tune
 };
 
 int main(int argc, char **argv)
