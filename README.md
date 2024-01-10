@@ -1,5 +1,5 @@
 # `wayp_plan_tools` `ROS 2` package
-Waypoint and planner tools for `ROS 2` with minimal dependencies.
+Waypoint and planner tools for `ROS 2` with minimal dependencies. [![Static Badge](https://img.shields.io/badge/ROS_2-Humble-34aec5)](https://docs.ros.org/en/humble/)
 
 Planner / control nodes:
 - `single_goal_pursuit`: Pure pursuit (for vehicles / robots), a simple cross-track error method
