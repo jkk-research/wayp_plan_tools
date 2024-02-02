@@ -21,18 +21,24 @@ It is assumed that the workspace is `~/ros2_ws/`.
 
 ```
 cd ~/ros2_ws/src
+```
+```
 git clone https://github.com/jkk-research/wayp_plan_tools
 ```
 
 ### `Terminal 1` 🔴 build
 ```
 cd ~/ros2_ws
-colcon build --packages-select wayp_plan_tools
+```
+```
+colcon build --packages-select wayp_plan_tools --symlink-install
 ```
 
 ### `Terminal 2` 🔵 run
 ```
-source ~/ros2_ws/install/local_setup.bash && source ~/ros2_ws/install/setup.bash
+source ~/ros2_ws/install/setup.bash
+```
+```
 ros2 launch wayp_plan_tools waypoint_saver.launch.py
 ```
 

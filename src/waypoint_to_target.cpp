@@ -63,6 +63,10 @@ public:
             {
                 static_speed = param.as_double();
             }
+            if (param.get_name() == "interpolate_waypoints")
+            {
+                interpolate_waypoints = param.as_bool();
+            }
         }
         return result;
     }
@@ -93,6 +97,8 @@ public:
         this->get_parameter("tf_frame_id", tf_frame_id);
         this->declare_parameter<std::string>("tf_child_frame_id", tf_child_frame_id);
         this->get_parameter("tf_child_frame_id", tf_child_frame_id);
+        this->declare_parameter<bool>("interpolate_waypoints", false);
+        this->get_parameter("interpolate_waypoints", interpolate_waypoints);
 
         if (waypoint_topic == "")
         {
@@ -137,6 +143,44 @@ private:
             actual_lookahead = (lookahead_max - lookahead_min) / (mps_beta - mps_alpha) * (speed_mps - mps_alpha) + lookahead_min;
         }
         return actual_lookahead;
+    }
+    geometry_msgs::msg::Point pointAtDistance(geometry_msgs::msg::Point p1, geometry_msgs::msg::Point p2, double distance, geometry_msgs::msg::Point circle_center)
+    {
+
+        double dx = p2.x - p1.x;
+        double dy = p2.y - p1.y;
+
+        double A = dx * dx + dy * dy;
+        double B = 2 * (dx * (p1.x - circle_center.x) + dy * (p1.y - circle_center.y));
+        double C = (p1.x - circle_center.x) * (p1.x - circle_center.x) + (p1.y - circle_center.y) * (p1.y - circle_center.y) - distance * distance;
+
+        double discriminant = B * B - 4 * A * C;
+        geometry_msgs::msg::Point intersection;
+        intersection.x = p2.x;
+        intersection.y = p2.y;
+        if (discriminant < 0)
+        {
+            // No intersection
+        }
+        else
+        {
+            // t1 and t2 are the parameters to be used in the parametric line equations.
+            double t1 = (-B + std::sqrt(discriminant)) / (2 * A);
+            double t2 = (-B - std::sqrt(discriminant)) / (2 * A);
+            if (t1 >= 0 && t1 <= 1)
+            {
+                intersection.x = (p1.x + t1 * dx);
+                intersection.y = (p1.y + t1 * dy);
+            }
+
+            if (t2 >= 0 && t2 <= 1)
+            {
+                intersection.x = (p1.x + t2 * dx);
+                intersection.y = (p1.y + t2 * dy);
+            }
+        }
+
+        return intersection;
     }
 
     void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
@@ -306,7 +350,41 @@ private:
             RCLCPP_INFO_STREAM(this->get_logger(), "Last waypoint reached " << std::fixed << std::setprecision(1) << (last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 << "s ago");
             last_waypoint_reached = true;
         }
-        pursuit_goal.pose.position = msg.poses[target_waypoint].position;
+        if (interpolate_waypoints)
+        {
+            // a waypoint to interpolate
+            int interpol_wp = target_waypoint - 4;
+            RCLCPP_WARN_STREAM(this->get_logger(), "Interpolating (unntested fuction)"); 
+            if (interpol_wp < 0)
+            {
+                interpol_wp = 0;
+                pursuit_goal.pose.position = msg.poses[target_waypoint].position;
+                // RCLCPP_INFO_STREAM(this->get_logger(), "Interpolated waypoint is less than 0");
+            }
+            else if (interpol_wp < closest_waypoint)
+            {
+                interpol_wp = closest_waypoint;
+                pursuit_goal.pose.position = msg.poses[target_waypoint].position;
+                // RCLCPP_INFO_STREAM(this->get_logger(), "Interpolated waypoint is less than closest waypoint");
+            }
+            // if the actual lookahead is not between the two waypoints
+            else if (distanceFromWayPoint(msg.poses[interpol_wp], current_pose) > lookahead_actual or distanceFromWayPoint(msg.poses[target_waypoint], current_pose) < lookahead_actual)
+            {
+                pursuit_goal.pose.position = msg.poses[target_waypoint].position;
+                // RCLCPP_INFO_STREAM(this->get_logger(), "Interpolated waypoint is not between the two waypoints");
+            }
+            else
+            {
+                // RCLCPP_INFO_STREAM(this->get_logger(), "Calculating interpolated waypoint");
+                // calculate the inteprolated lookahead_actual disatance between the two waypoints
+                geometry_msgs::msg::Point interpolated_pose = pointAtDistance(msg.poses[interpol_wp].position, msg.poses[target_waypoint].position, lookahead_actual, current_pose.position);
+                pursuit_goal.pose.position = interpolated_pose;
+            }
+        }
+        else
+        {
+            pursuit_goal.pose.position = msg.poses[target_waypoint].position;
+        }
         pursuit_goal.pose.orientation = msg.poses[target_waypoint].orientation;
         pursuit_closest.pose.position = msg.poses[closest_waypoint].position;
         pursuit_closest.pose.orientation = msg.poses[closest_waypoint].orientation;
@@ -447,7 +525,7 @@ private:
     bool last_waypoint_reached = false;
     bool static_speed_enabled = false;
     bool traj_closed_loop = false; // Trajectory loop closure bool, if the trajectory is linear/open loop: false, if circular/cloded loop: true
-    bool reinit = true;
+    bool reinit = true, interpolate_waypoints = false;
     double static_speed; // value of static speed in m/s
     visualization_msgs::msg::Marker pursuit_goal, pursuit_closest, cross_track_marker;
     visualization_msgs::msg::MarkerArray pursuit_vizu_arr;
