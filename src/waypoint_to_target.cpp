@@ -382,7 +382,7 @@ private:
                 geometry_msgs::msg::Point interpolated_pose = pointAtDistance(msg.poses[interpol_waypoint].position, msg.poses[target_waypoint].position, lookahead_actual, current_pose.position);
                 pursuit_goal.pose.position = interpolated_pose;
             }
-            RCLCPP_INFO_STREAM(this->get_logger(), "I: " << distanceFromWayPoint(msg.poses[interpol_waypoint], current_pose) << "m L: " << lookahead_actual << "m T:"<< distanceFromWayPoint(msg.poses[target_waypoint], current_pose) << "m");
+            //RCLCPP_INFO_STREAM(this->get_logger(), "I: " << distanceFromWayPoint(msg.poses[interpol_waypoint], current_pose) << "m L: " << lookahead_actual << "m T:"<< distanceFromWayPoint(msg.poses[target_waypoint], current_pose) << "m");
         }
         else
         {
