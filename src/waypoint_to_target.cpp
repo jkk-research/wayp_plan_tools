@@ -326,6 +326,23 @@ private:
                 break;
             }
         }
+        // calculate the waypoint from which to interpolate the lookahead_actual distance
+        int interpol_waypoint = closest_waypoint;
+        if (interpolate_waypoints)
+        {
+            for (int i = closest_waypoint; i <= last_wp; i++)
+            {
+                if (distanceFromWayPoint(msg.poses[i], current_pose) > lookahead_actual - 10.0)
+                {
+                    if (distanceFromWayPoint(msg.poses[i], current_pose) < lookahead_actual)
+                    {
+                        interpol_waypoint = i;
+                    }
+                    break;
+                }
+            }
+        }
+
         metrics_arr.data[common_wpt::TRG_WAYPOINT_ID] = target_waypoint;
 
         // RCLCPP_INFO_STREAM(this->get_logger(), "Closest waypoint[" << closest_waypoint << "] " << std::fixed << std::setprecision(1) << metrics_arr.data[common_wpt::CUR_LAT_DIST_ABS] << " m away");
@@ -352,34 +369,20 @@ private:
         }
         if (interpolate_waypoints)
         {
-            // a waypoint to interpolate
-            int interpol_wp = target_waypoint - 4;
-            RCLCPP_WARN_STREAM(this->get_logger(), "Interpolating (unntested fuction)"); 
-            if (interpol_wp < 0)
+            // the order should be (distances from the current pose): interpol_waypoint < lookahead < target_waypoint 
+            // if this is not the case, do not use the interpolated waypoint
+            if (distanceFromWayPoint(msg.poses[interpol_waypoint], current_pose) > lookahead_actual or distanceFromWayPoint(msg.poses[target_waypoint], current_pose) < lookahead_actual)
             {
-                interpol_wp = 0;
+                // this case do not use interpolated, use the target waypoint
                 pursuit_goal.pose.position = msg.poses[target_waypoint].position;
-                // RCLCPP_INFO_STREAM(this->get_logger(), "Interpolated waypoint is less than 0");
-            }
-            else if (interpol_wp < closest_waypoint)
-            {
-                interpol_wp = closest_waypoint;
-                pursuit_goal.pose.position = msg.poses[target_waypoint].position;
-                // RCLCPP_INFO_STREAM(this->get_logger(), "Interpolated waypoint is less than closest waypoint");
-            }
-            // if the actual lookahead is not between the two waypoints
-            else if (distanceFromWayPoint(msg.poses[interpol_wp], current_pose) > lookahead_actual or distanceFromWayPoint(msg.poses[target_waypoint], current_pose) < lookahead_actual)
-            {
-                pursuit_goal.pose.position = msg.poses[target_waypoint].position;
-                // RCLCPP_INFO_STREAM(this->get_logger(), "Interpolated waypoint is not between the two waypoints");
             }
             else
             {
-                // RCLCPP_INFO_STREAM(this->get_logger(), "Calculating interpolated waypoint");
-                // calculate the inteprolated lookahead_actual disatance between the two waypoints
-                geometry_msgs::msg::Point interpolated_pose = pointAtDistance(msg.poses[interpol_wp].position, msg.poses[target_waypoint].position, lookahead_actual, current_pose.position);
+                // calculate the inteprolated lookahead_actual disatance between the two waypoints (interpol_waypoint, target_waypoint)
+                geometry_msgs::msg::Point interpolated_pose = pointAtDistance(msg.poses[interpol_waypoint].position, msg.poses[target_waypoint].position, lookahead_actual, current_pose.position);
                 pursuit_goal.pose.position = interpolated_pose;
             }
+            RCLCPP_INFO_STREAM(this->get_logger(), "I: " << distanceFromWayPoint(msg.poses[interpol_waypoint], current_pose) << "m L: " << lookahead_actual << "m T:"<< distanceFromWayPoint(msg.poses[target_waypoint], current_pose) << "m");
         }
         else
         {
