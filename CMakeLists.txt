@@ -55,6 +55,8 @@ add_executable(stanley_control src/stanley_control.cpp)
 ament_target_dependencies(stanley_control  ${ament_dependencies} )
 add_executable(echo_metrics src/echo_metrics.cpp)
 ament_target_dependencies(echo_metrics  ${ament_dependencies} )
+add_executable(obstacle_avoidance_trapezoid src/obstacle_avoidance_trapezoid.cpp)
+ament_target_dependencies(obstacle_avoidance_trapezoid  ${ament_dependencies} )
 
 
 if(BUILD_TESTING)
@@ -81,5 +83,6 @@ install(TARGETS
   multiple_goal_pursuit
   stanley_control
   echo_metrics
+  obstacle_avoidance_trapezoid
   DESTINATION lib/${PROJECT_NAME})
 ament_package()
