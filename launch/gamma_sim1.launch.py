@@ -4,6 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch.actions import IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
+import os
 
 def generate_launch_description():
 
@@ -25,8 +26,9 @@ def generate_launch_description():
                 #{"file_dir": "/mnt/bag/waypoints/"},
                 {"file_name": "sim_waypoints3.csv"},
                 {"per_waypoint_display": 5}, # display speed every 5th waypoint 
-                {"stop_time": 5.0}, # stop for 5 seconds
-                {"stop_interval": 22.0}, # stop every 14 m
+                {"stop_interval": 22.0}, # stop every X meters
+                {"stop_decceleration": 0.2}, #  m/s^2
+                {"start_acceleration": 0.2}, #  m/s^2
                 ],
             ),
         IncludeLaunchDescription(
@@ -55,6 +57,8 @@ def generate_launch_description():
                         {"tf_frame_id": "base_link"},
                         {"tf_child_frame_id": "map"},
                         {"interpolate_waypoints": True},
+                        {"stop_duration": 8.0}, # stop for X seconds
+                        {"creep_duration": 6.0}, # creep for X seconds
                     ],
                 ),
                 Node(
@@ -95,7 +99,10 @@ def generate_launch_description():
         Node(
             package='foxglove_bridge',
             executable='foxglove_bridge',
-            output='screen',
+            name='fx',
+            output='screen', ##  TODO: supress output
+            arguments=['__log_level:=warn'], ## TODO: supress output
+            additional_env={'PYTHONUNBUFFERED': '1', 'ROS_PYTHON_LOG_CONFIG_FILE': os.devnull}, ## TODO: supress output
             ),
         ]
     )

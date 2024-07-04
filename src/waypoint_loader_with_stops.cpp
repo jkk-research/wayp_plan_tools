@@ -34,6 +34,7 @@
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/color_rgba.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 #include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2/LinearMath/Quaternion.h"
 #include "visualization_msgs/msg/marker.hpp"
@@ -64,6 +65,14 @@ class WaypointLoaderWithStops : public rclcpp::Node
             {
                 stop_interval_ = param.as_double();
             }
+            if (param.get_name() == "stop_decceleration")
+            {
+                stop_decceleration_ = param.as_double();
+            }
+            if (param.get_name() == "start_acceleration")
+            {
+                start_acceleration_ = param.as_double();
+            }
         }
         return result;
     }
@@ -78,11 +87,15 @@ class WaypointLoaderWithStops : public rclcpp::Node
         this->declare_parameter< std::string >("speed_marker_unit", "kmph");
         this->declare_parameter< int >("per_waypoint_display", per_waypoint);  // // display speed text marker every Nth waypoint
         this->declare_parameter< float >("stop_interval", stop_interval_);
+        this->declare_parameter< float >("stop_decceleration", stop_decceleration_);
+        this->declare_parameter< float >("start_acceleration", start_acceleration_);
         this->get_parameter("file_dir", file_dir);
         this->get_parameter("file_name", file_name);
         this->get_parameter("speed_marker_unit", speed_marker_unit);
         this->get_parameter("per_waypoint_display", per_waypoint);
         this->get_parameter("stop_interval", stop_interval_);
+        this->get_parameter("stop_decceleration", stop_decceleration_);
+        this->get_parameter("start_acceleration", start_acceleration_);
         multi_file_path_.clear();
         /*
         if (file_name.empty())
@@ -97,6 +110,7 @@ class WaypointLoaderWithStops : public rclcpp::Node
         parseColumns((file_dir + "/" + file_name), &multi_file_path_);
         lane_pub_ = this->create_publisher< geometry_msgs::msg::PoseArray >("waypointarray", 1);
         speed_pub_ = this->create_publisher< std_msgs::msg::Float32MultiArray >("waypointarray_speeds", 1);
+        stop_pub_ = this->create_publisher< std_msgs::msg::Int32MultiArray >("waypointarray_stops", 1);
         mark_pub_ = this->create_publisher< visualization_msgs::msg::MarkerArray >("waypointarray_marker", 1);
         timer_ = this->create_wall_timer(500ms, std::bind(&WaypointLoaderWithStops::timer_callback, this));
         sub_reinit_ = this->create_subscription< std_msgs::msg::Bool >("control_reinit", 10, std::bind(&WaypointLoaderWithStops::reinitCallback, this, _1));
@@ -266,19 +280,41 @@ class WaypointLoaderWithStops : public rclcpp::Node
             loadWaypointsForVer3(file_path.c_str(), &wps_c, &speeds_c);
             reinit = false;
         }
-        std_msgs::msg::Float32MultiArray speed_array;
+        std_msgs::msg::Float32MultiArray speed_array = std_msgs::msg::Float32MultiArray();
+        std_msgs::msg::Int32MultiArray stop_ids;
+        speeds_with_stop = speeds_c;
         geometry_msgs::msg::PoseArray wp_array;
         visualization_msgs::msg::MarkerArray mark_array;
-        // load speeds_c to speed_array
-        for (std::vector< float >::iterator it = speeds_c.begin(); it != speeds_c.end(); ++it)
-        {
-            speed_array.data.push_back(*it);
-        }
         int id = 0;
         float sum_distance = 0.0;
         geometry_msgs::msg::Pose prev_pose;
         for (std::vector< geometry_msgs::msg::Pose >::iterator it = wps_c.begin(); it != wps_c.end(); ++it)
         {
+            // skip first 20 waypoints
+            if (id > 20)
+            {  
+                // slow down to stop
+                if (stop_interval_ - sum_distance <= 6.0)  // X meters
+                {
+                    // calculate with deceleration (m/s^2)
+                    float stop_speed = std::sqrt(2 * stop_decceleration_ * (stop_interval_ - sum_distance));
+                    speeds_with_stop[id] = stop_speed;
+                    // speeds_with_stop[id] = speeds_c[id] / 4;
+                }
+                // speed up after stop
+                if (sum_distance < 2.0)  // X meters
+                {
+                    // calculate with acceleration (m/s^2)
+                    float start_speed = std::sqrt(2 * start_acceleration_ * sum_distance);
+                    speeds_with_stop[id] = start_speed;
+                    // speeds_with_stop[id] = speeds_c[id] / 4;
+                }
+                // actual stop
+                if (stop_interval_ - sum_distance <= 2.0)  // make waypoint 0 speed for X meters
+                {
+                    speeds_with_stop[id] = 0.0;
+                }
+            }
             wp_array.poses.push_back(*it);
             visualization_msgs::msg::Marker mark_elem;
             mark_elem.header.frame_id = "/map";
@@ -288,7 +324,7 @@ class WaypointLoaderWithStops : public rclcpp::Node
             mark_elem.scale.x = 1.0;
             mark_elem.scale.y = 0.4;
             mark_elem.scale.z = 0.6;
-            mark_elem.color = getColor(speeds_c[id]);
+            mark_elem.color = getColor(speeds_with_stop[id]);
             mark_elem.type = visualization_msgs::msg::Marker::CUBE;
             mark_elem.action = visualization_msgs::msg::Marker::MODIFY;
             mark_elem.pose = *it;
@@ -310,15 +346,15 @@ class WaypointLoaderWithStops : public rclcpp::Node
                 std::stringstream stream;
                 if (speed_marker_unit == "mps")  // Meter per second (m/s)
                 {
-                    stream << std::fixed << std::setprecision(1) << speeds_c[id] << " m/s";
+                    stream << std::fixed << std::setprecision(1) << speeds_with_stop[id] << " m/s";
                 }
                 else if (speed_marker_unit == "mph")  // Miles per hour (mph)
                 {
-                    stream << std::fixed << std::setprecision(1) << speeds_c[id] * 2.23694 << " mph";
+                    stream << std::fixed << std::setprecision(1) << speeds_with_stop[id] * 2.23694 << " mph";
                 }
                 else  // Kilometer per hour (km/h)
                 {
-                    stream << std::fixed << std::setprecision(1) << speeds_c[id] * 3.6 << " km/h";
+                    stream << std::fixed << std::setprecision(1) << speeds_with_stop[id] * 3.6 << " km/h";
                 }
                 text_elem.text = stream.str();
                 text_elem.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
@@ -351,12 +387,19 @@ class WaypointLoaderWithStops : public rclcpp::Node
                 stop_elem.pose.position.z += 0.1;
                 mark_array.markers.push_back(stop_elem);
                 sum_distance = 0.0;
+                stop_ids.data.push_back(id);
             }
             id++;
             prev_pose = *it;
         }
+        // load speeds_with_stop to speed_array
+        for (std::vector< float >::iterator it = speeds_with_stop.begin(); it != speeds_with_stop.end(); ++it)
+        {
+            speed_array.data.push_back(*it);
+        }
         lane_pub_->publish(wp_array);
         speed_pub_->publish(speed_array);
+        stop_pub_->publish(stop_ids);
         mark_pub_->publish(mark_array);
     }
 
@@ -377,6 +420,7 @@ class WaypointLoaderWithStops : public rclcpp::Node
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher< geometry_msgs::msg::PoseArray >::SharedPtr lane_pub_;
     rclcpp::Publisher< std_msgs::msg::Float32MultiArray >::SharedPtr speed_pub_;
+    rclcpp::Publisher< std_msgs::msg::Int32MultiArray >::SharedPtr stop_pub_;
     rclcpp::Publisher< visualization_msgs::msg::MarkerArray >::SharedPtr mark_pub_;
     rclcpp::Subscription< std_msgs::msg::Bool >::SharedPtr sub_reinit_;
     OnSetParametersCallbackHandle::SharedPtr callback_handle_;
@@ -385,10 +429,11 @@ class WaypointLoaderWithStops : public rclcpp::Node
     double interval_ = 0.4, stop_interval_ = 5.0;
     bool topic_based_saving;  // topic or transform (tf) based saving
     bool reinit = true;
+    float stop_decceleration_ = 0.2, start_acceleration_ = 0.2;
     geometry_msgs::msg::PoseArray lane_array;
     std::vector< geometry_msgs::msg::Pose > wps_c;
     unsigned int per_waypoint = 5;  // display speed text marker every 5th waypoint
-    std::vector< float > speeds_c;
+    std::vector< float > speeds_c, speeds_with_stop;
 };
 
 int main(int argc, char **argv)
