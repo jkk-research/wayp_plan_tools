@@ -33,6 +33,14 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     geometry_msgs::msg::PoseArray::SharedPtr waypoints_;
     int waypoints_size, closest_waypoint_index;
     int lookahead_distance_ = 10.0;
+    int bias_length_ = 2.0;
+    int bias_plus_length_ = 8.0;
+    int returnee_length_ = 2.0;
+    int returnee_plus_length_= 8.0
+    int offset_distance_ = 2.0;
+
+    std::map<int, int> index_counts;
+    std::vector<int> repeated_indices;
 
     void lane_callback(const geometry_msgs::msg::PoseArray::SharedPtr msg)
     {
@@ -93,11 +101,48 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
             );
             if (distance < 2.0) {
                 close_waypoints.push_back(i);
+
+                 // Increment count for this index
+                index_counts[i]++;
+
+                // If this index appears more than 3 times, store it in the vector
+                if (index_counts[i] > 3) {
+                    // Check if this index is already in the vector
+                    if (std::find(repeated_indices.begin(), repeated_indices.end(), i) == repeated_indices.end()) {
+                        repeated_indices.push_back(i);
+                        // RCLCPP_INFO(this->get_logger(), "Index %d appears more than 3 times", i);
+                    }
+                }
             }
         }
     }
 
+    if (!repeated_indices.empty()) {
+        int first_index = repeated_indices.front();
+        int last_index = repeated_indices.back();
 
+        double first_x = waypoints_->poses[first_index].position.x;
+        double first_y = waypoints_->poses[first_index].position.y;
+        double last_x = waypoints_->poses[last_index].position.x;
+        double last_y = waypoints_->poses[last_index].position.y;
+
+        
+        // TODO: Check these indexes and points again !!!!!!!!!
+        double first_point_x = first_x - bias_length_;
+        double last_point_x = last_x + returnee_length_;
+
+        double bias_start_x = first_point_x - bias_plus_length_;
+        double returnee_ends = last_point_x + returnee_plus_length_;
+
+        // Use your existing function to find the closest waypoints
+        int closest_first_index_minus_bias_length = find_closest_waypoint(first_point_x, first_y, *waypoints_);
+        int closest_last_index_plus_retunee_length = find_closest_waypoint(last_point_x, last_y,  *waypoints_);
+
+        // RCLCPP_INFO(this->get_logger(), "Line length between first and last repeated index: %f", line_length);
+        }
+
+    
+    
 
     RCLCPP_INFO(this->get_logger(), "Number of markers received: %zu", num_markers);
 }
