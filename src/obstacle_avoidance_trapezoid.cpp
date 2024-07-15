@@ -7,7 +7,11 @@
 #include <tf2_ros/transform_listener.h>
 
 
+
+
 #include <cmath> // For std::sqrt and std::pow
+#include <vector>
+#include <utility> // For std::pair
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
@@ -33,11 +37,19 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     geometry_msgs::msg::PoseArray::SharedPtr waypoints_;
     int waypoints_size, closest_waypoint_index;
     int lookahead_distance_ = 10.0;
-    int bias_length_ = 2.0;
-    int bias_plus_length_ = 8.0;
-    int returnee_length_ = 2.0;
-    int returnee_plus_length_= 8.0
-    int offset_distance_ = 2.0;
+    int start_index, end_index, avoidance_start_index, avoidance_end_index;
+
+    // Trapezoid parameters   TODO: Check if all needed
+    double detour_length_ = 10.0;
+    double avoid_detour_length = 2.0;
+    double detour_= detour_length_ + avoid_detour_length;
+    double avoid_return_length = 8.0;
+    double return_length_ = 2.0;
+    double return_ = return_length_ + avoid_return_length;
+    double avoid_length = avoid_detour_length + avoid_return_length;
+    double offset_distance_ = 2.0;
+    std::string avoidance_direction = "left";
+    double actual_len_of_avoid = 0.0;
 
     std::map<int, int> index_counts;
     std::vector<int> repeated_indices;
@@ -126,24 +138,70 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         double last_x = waypoints_->poses[last_index].position.x;
         double last_y = waypoints_->poses[last_index].position.y;
 
-        
-        // TODO: Check these indexes and points again !!!!!!!!!
-        double first_point_x = first_x - bias_length_;
-        double last_point_x = last_x + returnee_length_;
-
-        double bias_start_x = first_point_x - bias_plus_length_;
-        double returnee_ends = last_point_x + returnee_plus_length_;
-
-        // Use your existing function to find the closest waypoints
-        int closest_first_index_minus_bias_length = find_closest_waypoint(first_point_x, first_y, *waypoints_);
-        int closest_last_index_plus_retunee_length = find_closest_waypoint(last_point_x, last_y,  *waypoints_);
+        double initial_orientation = compute_orientation(first_x, first_y, last_x, last_y);
+       
+        int start_index = find_closest_waypoint(first_x - detour_ * std::cos(initial_orientation), first_y - detour_ * std::sin(initial_orientation), *waypoints_);
+        int end_index = find_closest_waypoint(last_x + return_ * std::cos(initial_orientation), last_y + return_ * std::sin(initial_orientation), *waypoints_);
+        int avoidance_start_index = find_closest_waypoint(first_x - avoid_detour_length * std::cos(initial_orientation), first_y - avoid_detour_length * std::sin(initial_orientation), *waypoints_);
+        int avoidance_end_index = find_closest_waypoint(last_x + avoid_return_length * std::cos(initial_orientation), avoid_return_length + return_ * std::sin(initial_orientation), *waypoints_);
 
         // RCLCPP_INFO(this->get_logger(), "Line length between first and last repeated index: %f", line_length);
+        }  
+
+    for (size_t i = start_index ; i < end_index+1; ++i) 
+    {
+        double x1 = waypoints_->poses[i].position.x;
+        double y1 = waypoints_->poses[i].position.y;
+        double x2 = waypoints_->poses[i+1].position.x;
+        double y2 = waypoints_->poses[i+1].position.y;
+
+        double distance = 0.0;
+
+        actual_len_of_avoid += line_length(x1, x2, y1, y2);
+        double orientation = compute_orientation(x1, y1, x2, y2);
+
+        if (actual_len_of_avoid < detour_length_) 
+        {
+           double distance = offset_distance_ * (actual_len_of_avoid / detour_length_);
+        }
+        else if (actual_len_of_avoid < detour_length_ + avoid_length) 
+        {
+           double distance = offset_distance_;
+        }
+        else if (actual_len_of_avoid < detour_length_ + avoid_length + return_length_) 
+        {
+           double distance = offset_distance_ * (1 - (actual_len_of_avoid - detour_length_ - avoid_length) / return_length_);
+        }
+        
+
+        double new_x, new_y;
+        if (avoidance_direction == "left") {
+            new_x = x1 + distance * std::cos(orientation + M_PI / 2);
+            new_y = y1 + distance * std::sin(orientation + M_PI / 2);
+        } else {
+            new_x = x1 + distance * std::cos(orientation - M_PI / 2);
+            new_y = y1 + distance * std::sin(orientation - M_PI / 2);
         }
 
-    
+        // Set the new position
+        waypoints_->poses[i].position.x = new_x;
+        waypoints_->poses[i].position.y = new_y;
+
+        // Compute and set the new orientation
+        
+        double new_orientation = compute_orientation(x1, y1, new_x, new_y);
+
+        // Set the new orientation
+        double half_yaw = new_orientation * 0.5;
+        waypoints_->poses[i].orientation.w = std::cos(half_yaw);
+        waypoints_->poses[i].orientation.z = std::sin(half_yaw);
+        waypoints_->poses[i].orientation.x = 0.0;
+        waypoints_->poses[i].orientation.y = 0.0;
+
+    }
     
 
+        
     RCLCPP_INFO(this->get_logger(), "Number of markers received: %zu", num_markers);
 }
 
@@ -170,6 +228,18 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     double line_length(double x1, double x2, double y1, double y2)
         {
             return std::sqrt(std::pow(x1 - x2, 2) + std::pow(y1 - y2, 2));
+        }
+
+    double compute_orientation(double x1, double y1, double x2, double y2)
+        {
+            // Calculate the difference in coordinates
+            double delta_x = x2 - x1;
+            double delta_y = y2 - y1;
+            
+            // Calculate the orientation
+            double orientation = std::atan2(delta_y, delta_x);
+            
+            return orientation;
         }
 
 
