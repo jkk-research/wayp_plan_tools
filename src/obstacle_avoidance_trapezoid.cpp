@@ -21,10 +21,68 @@ using std::placeholders::_1;
 
 class ObstacleAvoidanceTrapezoid : public rclcpp::Node
 {
+     rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector< rclcpp::Parameter > &parameters)
+    {
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        result.reason = "success";
+        for (const auto &param : parameters)
+        {
+            RCLCPP_INFO_STREAM(this->get_logger(), "Param update: " << param.get_name().c_str() << ": " << param.value_to_string().c_str());
+            if (param.get_name() == "detour_length_ ")
+            {
+                detour_length_ = param.as_double();
+            }
+            if (param.get_name() == "avoid_detour_length")
+            {
+                avoid_detour_length = param.as_double();
+            }
+            if (param.get_name() == "return_length_")
+            {
+                return_length_ = param.as_double();
+            }
+            if (param.get_name() == "avoid_return_length")
+            {
+                avoid_return_length = param.as_double();
+            }
+            if (param.get_name() == "offset_distance_")
+            {
+                offset_distance_ = param.as_double();
+            }
+            if (param.get_name() == "avoidance_direction")
+            {
+                avoidance_direction = param.as_string();
+            }
+            if (param.get_name() == "lookahead_distance_")
+            {
+                lookahead_distance_ = param.as_double();
+            }
+        }
+        return result;
+    }
+
    public:
     ObstacleAvoidanceTrapezoid()
         : Node("obstacle_avoidance_trapezoid")
     {
+        this->declare_parameter("detour_length_", detour_length_);
+        this->declare_parameter("avoid_detour_length", avoid_detour_length);
+        this->declare_parameter("return_length_", return_length_);
+        this->declare_parameter("avoid_return_length", avoid_return_length);
+        this->declare_parameter("offset_distance_", offset_distance_);
+        this->declare_parameter("avoidance_direction", avoidance_direction);
+        this->declare_parameter("lookahead_distance_", lookahead_distance_);
+
+        this->get_parameter("detour_length_", detour_length_);
+        this->get_parameter("avoid_detour_length", avoid_detour_length);
+        this->get_parameter("return_length_", return_length_);
+        this->get_parameter("avoid_return_length", avoid_return_length);    
+        this->get_parameter("offset_distance_", offset_distance_);
+        this->get_parameter("avoidance_direction", avoidance_direction);
+        this->get_parameter("lookahead_distance_", lookahead_distance_);
+        callback_handle_ = this->add_on_set_parameters_callback(std::bind(&ObstacleAvoidanceTrapezoid::parametersCallback, this, _1));
+
+
 
         lane_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>("waypointarray",10 ,std::bind(&ObstacleAvoidanceTrapezoid::lane_callback,this, std::placeholders::_1));
         current_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("current_pose", 10, std::bind(&ObstacleAvoidanceTrapezoid::current_pose_callback, this, std::placeholders::_1));
@@ -246,6 +304,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr lane_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr current_pose_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_array_sub_;
+    OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 };
 
 int main(int argc, char **argv)

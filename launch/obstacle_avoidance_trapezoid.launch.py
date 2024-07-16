@@ -11,7 +11,13 @@ def generate_launch_description():
             name='obstacle_avoidance_trapezoid',
             output='screen',
             parameters=[
-                # {"sample_param": 4.20},             
+                {"detour_length_": 10.0},
+                {"avoid_detour_length": 2.0},
+                {"return_length_": 10.0},
+                {"avoid_return_length": 2.0},
+                {"offset_distance_": 2.0},
+                {"avoidance_direction": "left"},
+                {"lookahead_distance_": 10.0},
             ],
         ),
     ])
