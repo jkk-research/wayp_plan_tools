@@ -169,14 +169,15 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
 
     
     
-    std::tie(first_index, last_index) = processFrame(msg);
-    processtrapezoid(first_index, last_index); 
-       
+    //std::tie(first_index, last_index) = processFrame(msg);
+    //processtrapezoid(first_index, last_index); 
+
+    processFrame(msg);   
     publishMarkers();
 
+    
     RCLCPP_INFO(this->get_logger(), "waypoints_size: %d, closest_waypoint_index: %d, lookahead_distance_: %d", waypoints_size, closest_waypoint_index, lookahead_distance_);
     
-  
 }
 
     int find_closest_waypoint(double current_x, double current_y, const geometry_msgs::msg::PoseArray& waypoints)
@@ -222,10 +223,10 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     std::pair<int, int> processFrame(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
     {
         int first_index = -1;
-        int last_index = -1;
+        int last_index  = -1;
         
-
-        if (waypoints_ != nullptr) 
+        RCLCPP_INFO(this->get_logger(), "closest_waypoint_index: %d, first_index: %d, last_index: %d, is_calculated: %d ",  closest_waypoint_index, first_index, last_index, is_calculated);
+        if (waypoints_ != nullptr && !is_calculated) 
         {
             std::unordered_set<int> waypoints_in_current_frame;
             for (auto& marker : msg->markers) 
@@ -270,13 +271,13 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
                     }
                 }
             }
-            return std::make_pair(first_index, last_index);
-        }
-    }        
+            //return std::make_pair(first_index, last_index);
+        //}
+    //}        
 
-        void processtrapezoid(int first_index, int last_index)  
-        {
-            if (!is_calculated)
+        //void processtrapezoid(int first_index, int last_index)  
+        //{
+            //if (!is_calculated)
             {
                 //if (first_index != -1 && last_index != -1) 
                 //{
@@ -387,14 +388,14 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
 
                     }
                 //}
+            first_run = false;
             }
 
-            first_run = false;
-
-            
-            
-
         }
+            
+            
+
+    }
         void publishMarkers()
         {
             auto marker_array = std::make_shared<visualization_msgs::msg::MarkerArray>();
