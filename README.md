@@ -72,6 +72,7 @@ It also provides a `/metrics_wayp` array topic with the following  elements:
 |`[4]` | current waypoint ID | `CUR_WAYPOINT_ID`
 |`[5]` | target waypoint ID | `TRG_WAYPOINT_ID`
 |`[6]` | target waypoint longitudinal distance  | `TRG_WAY_LON_DIST`
+|`[7]` | actual lookahead distance | `ACT_LOOK_DIST`
 
 <img src="csv/lookahead01.svg" width=60% />
 

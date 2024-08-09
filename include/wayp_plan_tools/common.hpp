@@ -18,6 +18,7 @@ namespace common_wpt
         CUR_WAYPOINT_ID,         // current waypoint ID
         TRG_WAYPOINT_ID,         // target waypoint ID
         TRG_WAY_LON_DIST,        // target waypoint longitudinal distance
+        ACT_LOOK_DIST,          // actual lookahead distance
         NOT_USED_YET
     };
 } // namespace common_wpt
