@@ -71,7 +71,9 @@ It also provides a `/metrics_wayp` array topic with the following  elements:
 |`[3]` | maximum lateral distance over time | `MAX_LAT_DISTANCE`
 |`[4]` | current waypoint ID | `CUR_WAYPOINT_ID`
 |`[5]` | target waypoint ID | `TRG_WAYPOINT_ID`
-|`[6]` | target waypoint longitudinal distance  | `TRG_WAY_LON_DIST`
+|`[6]` | target waypoint longitudinal distance (similar to lookahed distance, but at a waypoint) | `TRG_WAY_LON_DIST`
+|`[7]` | actual lookahead distance | `ACT_LOOK_DIST`
+
 
 <img src="csv/lookahead01.svg" width=60% />
 

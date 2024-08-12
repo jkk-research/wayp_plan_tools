@@ -311,6 +311,7 @@ private:
         metrics_arr.data[common_wpt::MAX_LAT_DISTANCE] = maximum_distance;
         // calculate the adaptive lookahead distance
         double lookahead_actual = calcLookahead(speed_msg.data);
+        metrics_arr.data[common_wpt::ACT_LOOK_DIST] = lookahead_actual;
 
         for (int i = closest_waypoint; i <= last_wp; i++)
         {
