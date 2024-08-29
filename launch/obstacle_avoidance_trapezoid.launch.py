@@ -11,13 +11,18 @@ def generate_launch_description():
             name='obstacle_avoidance_trapezoid',
             output='screen',
             parameters=[
-                {"detour_length_": 10.0},
-                {"avoid_detour_length": 2.0},
-                {"return_length_": 10.0},
-                {"avoid_return_length": 2.0},
-                {"offset_distance_": 2.0},
-                {"avoidance_direction": "left"},
-                {"lookahead_distance_": 10.0},
+                {"detour_length_": 4.0},                #kiteres hossza a trapez elso oldalan (m), 
+                {"avoid_detour_length": 6.0},           #a trapez hosszu oldal elso felenek a hossza (m)
+                {"avoid_return_length": 6.0},           #a trapez hosszu oldal masodik felenek a hossza (m)
+                {"return_length_": 4.0},                #a visszatero szakasz hossza (m)
+                {"offset_distance_": 3.0},              #a trapez szelessege (m), az eredeti uttol valo tavolsag
+                {"avoidance_direction": "left"},        #elkerules iranya
+                {"lookahead_distance_": 100},           #az eloretekintes hossza (m)
+                {"min_distance_treshold": 5.0},         #Az akadaly és a waypont kozotti tavolsag, amely alatt az akadalyt figyelembe vesszuk (m) 
+                {"sensitivity": 8.0},                   #az akadaly erzekenysege, ennyi elofordulas kell a figyelembe vetelhez minimum (db)
+                {"waypoint_topic":"waypointarray"},     #a waypointokat tartalmazo topik
+                {"pose_topic":"rotated_pose"},          #Az auto poziciojat tartalmazo topik
+                {"obstacle_topic":"clustered_marker"},  #Az akadalyokat tartalmazo topik, marker array
             ],
         ),
     ])

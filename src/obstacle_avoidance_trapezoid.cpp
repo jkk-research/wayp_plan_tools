@@ -58,6 +58,27 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
             {
                 lookahead_distance_ = param.as_double();
             }
+            if (param.get_name() == "sensitivity")
+            {
+                sensitivity = param.as_double();
+            }
+            if (param.get_name() == "min_distance_treshold")
+            {
+                min_distance_treshold = param.as_double();
+            }
+            if (param.get_name() == "waypoint_topic")
+            {
+                waypoint_topic = param.as_string();
+            }
+            if (param.get_name() == "pose_topic")
+            {
+                pose_topic = param.as_string();
+            }
+            if (param.get_name() == "obstacle_topic")
+            {
+                obstacle_topic = param.as_string();
+            }
+            
         }
         return result;
     }
@@ -66,6 +87,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     ObstacleAvoidanceTrapezoid()
         : Node("obstacle_avoidance_trapezoid")
     {
+       
         this->declare_parameter("detour_length_", detour_length_);
         this->declare_parameter("avoid_detour_length", avoid_detour_length);
         this->declare_parameter("return_length_", return_length_);
@@ -73,6 +95,12 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->declare_parameter("offset_distance_", offset_distance_);
         this->declare_parameter("avoidance_direction", avoidance_direction);
         this->declare_parameter("lookahead_distance_", lookahead_distance_);
+        this->declare_parameter("sensitivity", sensitivity);
+        this->declare_parameter("min_distance_treshold", min_distance_treshold);
+        this->declare_parameter("waypoint_topic", "waypointarray"); //default
+        this->declare_parameter("pose_topic", "rotated_pose"); //default
+        this->declare_parameter("obstacle_topic", "clustered_marker"); //default
+        
 
         this->get_parameter("detour_length_", detour_length_);
         this->get_parameter("avoid_detour_length", avoid_detour_length);
@@ -81,22 +109,27 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->get_parameter("offset_distance_", offset_distance_);
         this->get_parameter("avoidance_direction", avoidance_direction);
         this->get_parameter("lookahead_distance_", lookahead_distance_);
+        this->get_parameter("sensitivity", sensitivity);
+        this->get_parameter("min_distance_treshold", min_distance_treshold);
+        this->get_parameter("waypoint_topic", waypoint_topic);
+        this->get_parameter("pose_topic", pose_topic);
+        this->get_parameter("obstacle_topic", obstacle_topic);
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&ObstacleAvoidanceTrapezoid::parametersCallback, this, _1));
 
 
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-        lane_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>("waypointarray",10 ,std::bind(&ObstacleAvoidanceTrapezoid::lane_callback,this, std::placeholders::_1));
-        current_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("rotated_pose", 10, std::bind(&ObstacleAvoidanceTrapezoid::current_pose_callback, this, std::placeholders::_1));
-        marker_array_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>("clustered_marker", 10, std::bind(&ObstacleAvoidanceTrapezoid::marker_array_callback, this, std::placeholders::_1));
-        //closest_waypoint_sub_ = this->create_subscription<std_msgs::msg::Float32>("closest_waypoint", 10, std::bind(&ObstacleAvoidanceTrapezoid::closest_waypoint_callback, this, std::placeholders::_1));
-        marker_pub = this->create_publisher<visualization_msgs::msg::MarkerArray>("avoidance_waypoint_markers", 10);
+        lane_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic,10 ,std::bind(&ObstacleAvoidanceTrapezoid::lane_callback,this, std::placeholders::_1));
+        current_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(pose_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::current_pose_callback, this, std::placeholders::_1));
+        marker_array_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(obstacle_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::marker_array_callback, this, std::placeholders::_1));
+        marker_pub = this->create_publisher<visualization_msgs::msg::MarkerArray>("obstacle_avoidance_waypoint_markers", 10);
+        pose_array_pub = this->create_publisher<geometry_msgs::msg::PoseArray>("obstacle_avoidance_pose_array_topic", 10);
         timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&ObstacleAvoidanceTrapezoid::timer_callback, this));
     }
     private:
 
-
+    std::string waypoint_topic, pose_topic, obstacle_topic;
     geometry_msgs::msg::PoseStamped::SharedPtr current_pose_;
     geometry_msgs::msg::PoseArray::SharedPtr waypoints_;
     geometry_msgs::msg::PoseArray::SharedPtr modified_waypoints;
@@ -105,13 +138,11 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     int closest_waypoint_index ;
     int lookahead_distance_ = 50.0;
     int start_index = -1, end_index = -1;
-    //int end_index,
     int avoidance_start_index, avoidance_end_index;
     int first_index, last_index;
     double distance = 0.0;
     
     visualization_msgs::msg::MarkerArray::SharedPtr msg_;
-
 
     // Trapezoid parameters   TODO: Check if all needed
     double detour_length_ = 5.0;
@@ -123,19 +154,18 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     double avoid_length = avoid_detour_length + avoid_return_length;
     double offset_distance_ = 6.0;
     std::string avoidance_direction = "left";
+    double min_distance_treshold = 5.0;
+    double sensitivity = 3.0;
+
     double actual_len_of_avoid = 0.0;
     bool is_calculated = false;
     bool is_trapezoid = false;
     bool first_run = true;
-    bool is_reinitialized = false;
+    
     std::vector<int> closest_waypoint_index_m;
 
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-    
-    //tf2_ros::TransformListener tfListener(tfBuffer);
-    
-
 
     std::map<int, int> index_counts;
     std::vector<int> repeated_indices;
@@ -182,12 +212,10 @@ public:
                                 auto point_out = std::make_shared<geometry_msgs::msg::PointStamped>();
                                 tf2::doTransform(point_in, *point_out, transformStamped);
 
-                                
-
                                 points_out.push_back(point_out);
                                 if (!is_calculated)
                                 {
-                                    std::tie(first_index, last_index) = processFrame(points_out, closest_waypoint_index, waypoints_, is_reinitialized);
+                                    std::tie(first_index, last_index) = processFrame(points_out, closest_waypoint_index, waypoints_);
                                 }
 
                                 if (first_index != -1 && last_index != -1 && first_index != last_index && first_index < last_index) 
@@ -210,7 +238,8 @@ public:
                                         start_index = -1;
                                         end_index = -1;
                                         is_trapezoid = false;
-                                        //first_run = false;
+                                        actual_len_of_avoid = 0.0;
+                                        first_run = true;
                                         
                                     }
                                     else
@@ -235,10 +264,7 @@ public:
                                                     y2 = y1;
                                                 }
                                                 
-                                                // double x1 = waypoints_->poses[i].position.x;
-                                                // double y1 = waypoints_->poses[i].position.y;
-                                                // double x2 = waypoints_->poses[i+1].position.x;
-                                                // double y2 = waypoints_->poses[i+1].position.y;
+                                                
 
                                                 double orientation = compute_orientation(x1, y1, x2, y2);
                                                 actual_len_of_avoid += line_length(x1, x2, y1, y2);
@@ -277,8 +303,6 @@ public:
                                                         new_y = y1 + distance * std::sin(orientation - M_PI / 2);
                                                     }
                                                 
-                                                
-
                                                 }
                                                 else if (actual_len_of_avoid < detour_length_ + avoid_length + return_length_ && actual_len_of_avoid > detour_length_ + avoid_length) 
                                                 {
@@ -295,16 +319,24 @@ public:
                                                         new_y = y1 + distance * std::sin(orientation - M_PI / 2);
                                                     }
                                                 }
+                                                else
+                                                {
+                                                    new_x = x1;
+                                                    new_y = y1;
+                                                }
 
                                                 waypoints_->poses[i].position.x = new_x;
                                                 waypoints_->poses[i].position.y = new_y;
 
                                                
 
-                                                if (i < end_index) // Check if next waypoint exists
+                                                for (int i = start_index; i < end_index-1; ++i)
+                                                //for (size_t i = 0; i < waypoints_->poses.size(); ++i)
                                                 {
                                                     double next_x = waypoints_->poses[i+1].position.x;
                                                     double next_y = waypoints_->poses[i+1].position.y;
+                                                    double new_x = waypoints_->poses[i].position.x;
+                                                    double new_y = waypoints_->poses[i].position.y;
                                                     double new_orientation = compute_orientation(new_x, new_y, next_x, next_y);
 
                                                     // Set the new orientation
@@ -315,35 +347,20 @@ public:
                                                     waypoints_->poses[i].orientation.y = 0.0;
                                                 }
 
-
-
                                                 is_trapezoid = true;
-                                                first_run = false;
                                             }
                                         }
                                     
-    
+                                    first_run = false;
                                     }    
                              
                                 }
-                             
-                                
-
-                               
-                                
-                                 
+                                                                                                                       
                                 //RCLCPP_INFO(this->get_logger(), "closest_waypoint_index: %d, start_index: %d, end_index: %d,first_index: %d, last_index: %d, is_calculated: %d, is_trapezoid: %d, first_run: %d ",  closest_waypoint_index, start_index, end_index,first_index,end_index, is_calculated,is_trapezoid, first_run);
                                 
                                 publishMarkers(closest_waypoint_index,start_index,end_index,first_index,last_index, waypoints_);
-
+                                RCLCPP_INFO(this->get_logger(), "Size of waypoints_frame_count: %zu, is_calculated: %d",waypoint_frame_counts.size(), is_calculated);
                                 
-                                // else
-                                // {
-                                //     publishMarkers(closest_waypoint_index,start_index,end_index, modified_waypoints);
-                                // }
-                                // Print out the point coordinates
-                                // RCLCPP_INFO(this->get_logger(), "Point position: (%f, %f, %f)", 
-                                //     point.x, point.y, point.z);
                             }
                         }
                         catch (tf2::TransformException &ex)
@@ -431,7 +448,7 @@ public:
             return orientation;
         }
 
-    std::pair<int, int> processFrame(const std::vector<geometry_msgs::msg::PointStamped::SharedPtr>& points_out, int closest_waypoint_index, geometry_msgs::msg::PoseArray::SharedPtr waypoints_, bool is_reinitialized)
+    std::pair<int, int> processFrame(const std::vector<geometry_msgs::msg::PointStamped::SharedPtr>& points_out, int closest_waypoint_index, geometry_msgs::msg::PoseArray::SharedPtr waypoints_)
     {
         int first_index = -1;
         int last_index  = -1;
@@ -442,7 +459,7 @@ public:
          
         
             std::unordered_set<int> waypoints_in_current_frame;
-            waypoints_in_current_frame.clear();
+            
             
                 for (const auto& point_out : points_out)
                 {
@@ -463,7 +480,7 @@ public:
                             closest_waypoint_index_m = i;
                         }
                     }
-                    if (closest_waypoint_index_m != -1 && min_distance < 5.0) 
+                    if (closest_waypoint_index_m != -1 && min_distance < min_distance_treshold) 
                     {
                         //RCLCPP_INFO(this->get_logger(), "Closest waypoint to a marker point is %d with a distance of %f and current_pose is: %d", closest_waypoint_index_m, min_distance,closest_waypoint_index);
                         waypoints_in_current_frame.insert(closest_waypoint_index_m);
@@ -482,8 +499,8 @@ public:
             {
                 for (auto& pair : waypoint_frame_counts) 
                 {
-                    // RCLCPP_INFO(this->get_logger(), "Waypoint %d frame count: %d, Size of waypoints_frame_count: %zu", pair.first, pair.second,waypoint_frame_counts.size());
-                    if (pair.second >= 3) 
+                   
+                    if (pair.second >= sensitivity) 
                     {
                         if (first_index == -1 || pair.first < first_index) 
                         {
@@ -519,224 +536,120 @@ public:
 
         return std::make_pair(start_index, end_index);
     }
-
-    geometry_msgs::msg::PoseArray::SharedPtr create_trapezoid(geometry_msgs::msg::PoseArray::SharedPtr waypoints_, int start_index_, int end_index_)
-    {                    
-
-        //RCLCPP_INFO(this->get_logger(), "start_index: %ld, end_index: %ld", start_index_, end_index_);
-        
-        for (size_t i = start_index_ ; i < end_index_+1; ++i) 
+          
+    void publishMarkers(size_t closest_waypoint_index, size_t start_index, size_t end_index ,size_t first_index,size_t last_index, geometry_msgs::msg::PoseArray::SharedPtr waypoints_)
+    {
+        auto marker_array = std::make_shared<visualization_msgs::msg::MarkerArray>();
+        auto pose_array = std::make_shared<geometry_msgs::msg::PoseArray>();
+        if (waypoints_ != nullptr) 
         {
-            double x1 = waypoints_->poses[i].position.x;
-            double y1 = waypoints_->poses[i].position.y;
-            double x2 = waypoints_->poses[i+1].position.x;
-            double y2 = waypoints_->poses[i+1].position.y;
 
-            
-
-            actual_len_of_avoid += line_length(x1, x2, y1, y2);
-            double orientation = compute_orientation(x1, y1, x2, y2);
-
-            //RCLCPP_INFO(this->get_logger(), "actual_len_of_avoid: %f", actual_len_of_avoid);
-            
-            double new_x, new_y;
-
-            if (actual_len_of_avoid < detour_length_) 
+            pose_array->header.frame_id = "map";
+            pose_array->header.stamp = this->now();
+            // Iterate over the waypoints
+            for (size_t i = 0; i < waypoints_->poses.size(); ++i) 
             {
-                double distance = offset_distance_ * (actual_len_of_avoid / detour_length_);
-                RCLCPP_INFO(this->get_logger(), " distance: %f", distance);
-                if (avoidance_direction == "left") 
+                // Create a Marker for the current waypoint
+                visualization_msgs::msg::Marker marker;
+                marker.header.frame_id = "map";
+                marker.header.stamp = this->now();
+                marker.ns = "waypoints";
+                marker.id = i;
+                marker.type = visualization_msgs::msg::Marker::ARROW;
+                marker.action = visualization_msgs::msg::Marker::ADD;
+                marker.pose = waypoints_->poses[i];
+
+                if (i == closest_waypoint_index)
                 {
-                    new_x = x1 + distance * std::cos(orientation + M_PI / 2);
-                    new_y = y1 + distance * std::sin(orientation + M_PI / 2);
-                }   
-                else 
-                {
-                    new_x = x1 + distance * std::cos(orientation - M_PI / 2);
-                    new_y = y1 + distance * std::sin(orientation - M_PI / 2);
+                    // Set a different scale and color for the closest waypoint
+                    marker.scale.x = 2.0;
+                    marker.scale.y = 2.0;
+                    marker.scale.z = 2.0;
+                    marker.color.a = 1.0;
+                    marker.color.r = 1.0;
+                    marker.color.g = 0.0;
+                    marker.color.b = 0.0;
                 }
-                //waypoints_->poses[i].position.x = new_x;
-                //waypoints_->poses[i].position.y = new_y;
+                else if (i==start_index)
+                {
+                    marker.scale.x = 1.5;
+                    marker.scale.y = 1.5;
+                    marker.scale.z = 1.5;
+                    marker.color.a = 1.0;
+                    marker.color.r = 0.0;
+                    marker.color.g = 0.0;
+                    marker.color.b = 1.0;
+                }
+                else if (i==end_index)
+                {
+                    marker.scale.x = 1.5;
+                    marker.scale.y = 1.5;
+                    marker.scale.z = 1.5;
+                    marker.color.a = 1.0;
+                    marker.color.r = 0.0;
+                    marker.color.g = 0.5;
+                    marker.color.b = 1.0;
+                }
+                else if (i==first_index)
+                {
+                    marker.scale.x = 1.5;
+                    marker.scale.y = 1.5;
+                    marker.scale.z = 1.5;
+                    marker.color.a = 1.0;
+                    marker.color.r = 0.5;
+                    marker.color.g = 0.5;
+                    marker.color.b = 1.0;
+                }
+                else if (i==last_index)
+                {
+                    marker.scale.x = 1.5;
+                    marker.scale.y = 1.5;
+                    marker.scale.z = 1.5;
+                    marker.color.a = 1.0;
+                    marker.color.r = 0.0;
+                    marker.color.g = 0.5;
+                    marker.color.b = 0.5;
+                }
+                else if (i==closest_waypoint_index + lookahead_distance_)
+                {
+                    marker.scale.x = 1.5;
+                    marker.scale.y = 1.5;
+                    marker.scale.z = 1.5;
+                    marker.color.a = 1.0;
+                    marker.color.r = 1.0;
+                    marker.color.g = 1.0;
+                    marker.color.b = 0.0;
+                }
+
+                else
+                {
+                    marker.scale.x = 0.7;
+                    marker.scale.y = 0.7;
+                    marker.scale.z = 0.7;
+                    marker.color.a = 1.0;
+                    marker.color.r = 0.0;
+                    marker.color.g = 1.0;
+                    marker.color.b = 0.0;
+                }
+                
+                // Add the Marker to the MarkerArray
+                marker_array->markers.push_back(marker);
+                pose_array->poses.push_back(waypoints_->poses[i]);
 
             }
-            else if (actual_len_of_avoid < detour_length_ + avoid_length) 
-            {
-                double distance = offset_distance_;
-                if (avoidance_direction == "left") 
-                {
-                    new_x = x1 + distance * std::cos(orientation + M_PI / 2);
-                    new_y = y1 + distance * std::sin(orientation + M_PI / 2);
-                }   
-                else 
-                {
-                    new_x = x1 + distance * std::cos(orientation - M_PI / 2);
-                    new_y = y1 + distance * std::sin(orientation - M_PI / 2);
-                }
-            
-                //waypoints_->poses[i].position.x = new_x;
-                //waypoints_->poses[i].position.y = new_y;
-
-            }
-            else if (actual_len_of_avoid < detour_length_ + avoid_length + return_length_ && actual_len_of_avoid > detour_length_ + avoid_length) 
-            {
-                double distance = offset_distance_ * (1 - (actual_len_of_avoid - detour_length_ - avoid_length) / return_length_);
-                if (avoidance_direction == "left") 
-                {
-                    new_x = x1 + distance * std::cos(orientation + M_PI / 2);
-                    new_y = y1 + distance * std::sin(orientation + M_PI / 2);
-                }   
-                else 
-                {
-                    new_x = x1 + distance * std::cos(orientation - M_PI / 2);
-                    new_y = y1 + distance * std::sin(orientation - M_PI / 2);
-                }
-            }
-            
-            //RCLCPP_INFO(this->get_logger(), "New X: %f, New Y: %f", new_x, new_y);
-
-
-
-            
-            
-                
-                
-                    // Your code to modify the waypoint
-
-            waypoints_->poses[i].position.x = new_x;
-            waypoints_->poses[i].position.y = new_y;
-
-           // RCLCPP_INFO(this->get_logger(), "New X: %f, New Y: %f", new_x, new_y);
-
-            // Compute and set the new orientation
-            double new_orientation = compute_orientation(x1, y1, new_x, new_y);
-
-            // Set the new orientation
-            double half_yaw = new_orientation * 0.5;
-            waypoints_->poses[i].orientation.w = std::cos(half_yaw);
-            waypoints_->poses[i].orientation.z = std::sin(half_yaw);
-            waypoints_->poses[i].orientation.x = 0.0;
-            waypoints_->poses[i].orientation.y = 0.0;
-            //RCLCPP_INFO(this->get_logger(), "waypoints_size: %d", waypoints_size);
-
-                
-            
-            is_trapezoid = true;
-            
-
-            return waypoints_;
-
         }
-    }                    
-            
-
-        
-        
-   
-            
-            
-    //}
-        void publishMarkers(size_t closest_waypoint_index, size_t start_index, size_t end_index ,size_t first_index,size_t last_index, geometry_msgs::msg::PoseArray::SharedPtr waypoints_)
-        {
-            auto marker_array = std::make_shared<visualization_msgs::msg::MarkerArray>();
-            if (waypoints_ != nullptr) 
-            {
-                // Iterate over the waypoints
-                for (size_t i = 0; i < waypoints_->poses.size(); ++i) 
-                {
-                    // Create a Marker for the current waypoint
-                    visualization_msgs::msg::Marker marker;
-                    marker.header.frame_id = "map";
-                    marker.header.stamp = this->now();
-                    marker.ns = "waypoints";
-                    marker.id = i;
-                    marker.type = visualization_msgs::msg::Marker::ARROW;
-                    marker.action = visualization_msgs::msg::Marker::ADD;
-                    marker.pose = waypoints_->poses[i];
-
-                    if (i == closest_waypoint_index)
-                    {
-                        // Set a different scale and color for the closest waypoint
-                        marker.scale.x = 2.0;
-                        marker.scale.y = 2.0;
-                        marker.scale.z = 2.0;
-                        marker.color.a = 1.0;
-                        marker.color.r = 1.0;
-                        marker.color.g = 0.0;
-                        marker.color.b = 0.0;
-                    }
-                    else if (i==start_index)
-                    {
-                        marker.scale.x = 1.5;
-                        marker.scale.y = 1.5;
-                        marker.scale.z = 1.5;
-                        marker.color.a = 1.0;
-                        marker.color.r = 0.0;
-                        marker.color.g = 0.0;
-                        marker.color.b = 1.0;
-                    }
-                    else if (i==end_index)
-                    {
-                        marker.scale.x = 1.5;
-                        marker.scale.y = 1.5;
-                        marker.scale.z = 1.5;
-                        marker.color.a = 1.0;
-                        marker.color.r = 0.0;
-                        marker.color.g = 0.5;
-                        marker.color.b = 1.0;
-                    }
-                    else if (i==first_index)
-                    {
-                        marker.scale.x = 1.5;
-                        marker.scale.y = 1.5;
-                        marker.scale.z = 1.5;
-                        marker.color.a = 1.0;
-                        marker.color.r = 0.5;
-                        marker.color.g = 0.5;
-                        marker.color.b = 1.0;
-                    }
-                    else if (i==last_index)
-                    {
-                        marker.scale.x = 1.5;
-                        marker.scale.y = 1.5;
-                        marker.scale.z = 1.5;
-                        marker.color.a = 1.0;
-                        marker.color.r = 0.0;
-                        marker.color.g = 0.5;
-                        marker.color.b = 0.5;
-                    }
-
-                    else
-                    {
-                        marker.scale.x = 1.0;
-                        marker.scale.y = 1.0;
-                        marker.scale.z = 1.0;
-                        marker.color.a = 1.0;
-                        marker.color.r = 0.0;
-                        marker.color.g = 1.0;
-                        marker.color.b = 0.0;
-                    }
-                    
-                    
-
-                    
-
-
-
-                    // Add the Marker to the MarkerArray
-                    marker_array->markers.push_back(marker);
-                }
-            }
-            // Publish the MarkerArray
-            marker_pub->publish(*marker_array);
-        }
-        
+        // Publish the MarkerArray
+        marker_pub->publish(*marker_array);
+        pose_array_pub->publish(*pose_array);
+    }
+    
 
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr lane_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr current_pose_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_array_sub_;
-    //rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr closest_waypoint_sub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub;
+    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub;
     OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 };
 
