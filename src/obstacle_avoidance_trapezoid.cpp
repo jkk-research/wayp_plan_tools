@@ -78,6 +78,10 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
             {
                 obstacle_topic = param.as_string();
             }
+            if (param.get_name() == "lidar_frame")
+            {
+                lidar_frame = param.as_string();
+            }
             
         }
         return result;
@@ -100,6 +104,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->declare_parameter("waypoint_topic", "waypointarray"); //default
         this->declare_parameter("pose_topic", "rotated_pose"); //default
         this->declare_parameter("obstacle_topic", "clustered_marker"); //default
+        this->declare_parameter("lidar_frame", "lexus3/os_center_a_laser_data_frame"); //default
         
 
         this->get_parameter("detour_length_", detour_length_);
@@ -114,6 +119,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->get_parameter("waypoint_topic", waypoint_topic);
         this->get_parameter("pose_topic", pose_topic);
         this->get_parameter("obstacle_topic", obstacle_topic);
+        this->get_parameter("lidar_frame", lidar_frame);
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&ObstacleAvoidanceTrapezoid::parametersCallback, this, _1));
 
 
@@ -129,7 +135,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     }
     private:
 
-    std::string waypoint_topic, pose_topic, obstacle_topic;
+    std::string waypoint_topic, pose_topic, obstacle_topic, lidar_frame;
     geometry_msgs::msg::PoseStamped::SharedPtr current_pose_;
     geometry_msgs::msg::PoseArray::SharedPtr waypoints_;
     geometry_msgs::msg::PoseArray::SharedPtr modified_waypoints;
@@ -196,7 +202,7 @@ public:
                             point_in.header.frame_id = marker.header.frame_id;
 
                             //RCLCPP_INFO(this->get_logger(), "Number of markers: %zu", objects_->markers.size());
-                            if (!tf_buffer_->canTransform("map", "lexus3/os_center_a_laser_data_frame", tf2::TimePointZero, std::chrono::seconds(1)))
+                            if (!tf_buffer_->canTransform("map", lidar_frame, tf2::TimePointZero, std::chrono::seconds(1)))
                                 {
                                     RCLCPP_WARN(this->get_logger(), "Waiting for transform timed out");
                                     continue;

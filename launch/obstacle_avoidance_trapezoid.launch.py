@@ -23,6 +23,7 @@ def generate_launch_description():
                 {"waypoint_topic":"waypointarray"},     #a waypointokat tartalmazo topik
                 {"pose_topic":"rotated_pose"},          #Az auto poziciojat tartalmazo topik
                 {"obstacle_topic":"clustered_marker"},  #Az akadalyokat tartalmazo topik, marker array
+                {"lidar_frame":"lexus3/os_center_a_laser_data_frame"}, #melyik lidar frame-et hasznaljuk az akadalyok detektalasahoz
             ],
         ),
     ])
