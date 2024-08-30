@@ -1,37 +1,39 @@
+#include <math.h>
+
 #include <chrono>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <string>
-#include <math.h>
-#include <limits>
 
+#include "geometry_msgs/msg/pose.hpp"
+#include "geometry_msgs/msg/pose_array.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
+#include "geometry_msgs/msg/twist.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/color_rgba.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
-#include "visualization_msgs/msg/marker_array.hpp"
-#include "visualization_msgs/msg/marker.hpp"
-#include "geometry_msgs/msg/twist.hpp"
-#include "geometry_msgs/msg/pose.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
-#include "geometry_msgs/msg/pose_array.hpp"
-#include "geometry_msgs/msg/transform_stamped.hpp"
-#include "rcl_interfaces/msg/set_parameters_result.hpp"
-#include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
-#include "tf2_ros/transform_listener.h"
-#include "tf2_ros/buffer.h"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2/LinearMath/Quaternion.h"
 #include "tf2/convert.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
+#include "visualization_msgs/msg/marker.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
 #include "wayp_plan_tools/common.hpp"
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 class WaypointToTarget : public rclcpp::Node
 {
-public:
-    rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters)
+   public:
+    rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector< rclcpp::Parameter > &parameters)
     {
         rcl_interfaces::msg::SetParametersResult result;
         result.successful = true;
@@ -67,38 +69,51 @@ public:
             {
                 interpolate_waypoints = param.as_bool();
             }
+            if (param.get_name() == "stop_duration")
+            {
+                stop_duration = param.as_double();
+            }
+            if (param.get_name() == "creep_duration")
+            {
+                creep_duration = param.as_double();
+            }
         }
         return result;
     }
-    WaypointToTarget() : Node("waypoint_to_target_node")
+    WaypointToTarget()
+        : Node("waypoint_to_target_node")
     {
-        metrics_arr.data.resize(common_wpt::NOT_USED_YET); // initialize the metrics array
-        pursuit_vizu_arr.markers.resize(3);                // initialize visualization
-        tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
-        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+        metrics_arr.data.resize(common_wpt::NOT_USED_YET);  // initialize the metrics array
+        pursuit_vizu_arr.markers.resize(3);                 // initialize visualization
+        tf_buffer_ = std::make_unique< tf2_ros::Buffer >(this->get_clock());
+        tf_listener_ = std::make_shared< tf2_ros::TransformListener >(*tf_buffer_);
         // Call timer_callback function 20 Hz, 50 milliseconds
         timer_ = this->create_wall_timer(std::chrono::milliseconds(50), std::bind(&WaypointToTarget::timer_callback, this));
 
-        this->declare_parameter<std::string>("waypoint_topic", "");
+        this->declare_parameter< std::string >("waypoint_topic", "");
         this->get_parameter("waypoint_topic", waypoint_topic);
-        this->declare_parameter<double>("lookahead_min", 9.0);
+        this->declare_parameter< double >("lookahead_min", 9.0);
         this->get_parameter("lookahead_min", lookahead_min);
-        this->declare_parameter<double>("lookahead_max", 14.5);
+        this->declare_parameter< double >("lookahead_max", 14.5);
         this->get_parameter("lookahead_max", lookahead_max);
-        this->declare_parameter<double>("mps_alpha", 3.2);
+        this->declare_parameter< double >("mps_alpha", 3.2);
         this->get_parameter("mps_alpha", mps_alpha);
-        this->declare_parameter<double>("mps_beta", 5.2);
+        this->declare_parameter< double >("mps_beta", 5.2);
         this->get_parameter("mps_beta", mps_beta);
-        this->declare_parameter<double>("static_speed", 4.0);
+        this->declare_parameter< double >("static_speed", 4.0);
         this->get_parameter("static_speed", static_speed);
-        this->declare_parameter<bool>("static_speed_enabled", false);
+        this->declare_parameter< bool >("static_speed_enabled", false);
         this->get_parameter("static_speed_enabled", static_speed_enabled);
-        this->declare_parameter<std::string>("tf_frame_id", tf_frame_id);
+        this->declare_parameter< std::string >("tf_frame_id", tf_frame_id);
         this->get_parameter("tf_frame_id", tf_frame_id);
-        this->declare_parameter<std::string>("tf_child_frame_id", tf_child_frame_id);
+        this->declare_parameter< std::string >("tf_child_frame_id", tf_child_frame_id);
         this->get_parameter("tf_child_frame_id", tf_child_frame_id);
-        this->declare_parameter<bool>("interpolate_waypoints", false);
+        this->declare_parameter< bool >("interpolate_waypoints", false);
         this->get_parameter("interpolate_waypoints", interpolate_waypoints);
+        this->declare_parameter< double >("stop_duration", 10.0);
+        this->get_parameter("stop_duration", stop_duration);
+        this->declare_parameter< double >("creep_duration", 5.0);
+        this->get_parameter("creep_duration", creep_duration);
 
         if (waypoint_topic == "")
         {
@@ -106,19 +121,24 @@ public:
             waypoint_topic = "waypointarray";
         }
 
-        goal_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("pursuitviz", 10);
-        speed_pub_ = this->create_publisher<std_msgs::msg::Float32>("pursuitspeedtarget", 10);
-        target_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("targetpoints", 10);
-        metrics_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("metrics_wayp", 10);
-        sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&WaypointToTarget::waypointCallback, this, _1));
-        sub_s_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("waypointarray_speeds", 10, std::bind(&WaypointToTarget::speedCallback, this, _1));
-        sub_reinit_ = this->create_subscription<std_msgs::msg::Bool>("control_reinit", 10, std::bind(&WaypointToTarget::reinitCallback, this, _1));
+        goal_pub_ = this->create_publisher< visualization_msgs::msg::MarkerArray >("pursuitviz", 10);
+        speed_pub_ = this->create_publisher< std_msgs::msg::Float32 >("pursuitspeedtarget", 10);
+        stopping_logic_pub_ = this->create_publisher< std_msgs::msg::Bool >("stopping_logic_active", 10);
+        target_pub_ = this->create_publisher< geometry_msgs::msg::PoseArray >("targetpoints", 10);
+        metrics_pub_ = this->create_publisher< std_msgs::msg::Float32MultiArray >("metrics_wayp", 10);
+        status_pub_ = this->create_publisher< visualization_msgs::msg::Marker >("status", 10);
+        sub_w_ = this->create_subscription< geometry_msgs::msg::PoseArray >(waypoint_topic, 10, std::bind(&WaypointToTarget::waypointCallback, this, _1));
+        sub_s_ = this->create_subscription< std_msgs::msg::Float32MultiArray >("waypointarray_speeds", 10, std::bind(&WaypointToTarget::speedCallback, this, _1));
+        sub_reinit_ = this->create_subscription< std_msgs::msg::Bool >("control_reinit", 10, std::bind(&WaypointToTarget::reinitCallback, this, _1));
+        // TODO: param instead of /lexus3/vehicle_status
+        sub_veh_speed = this->create_subscription<geometry_msgs::msg::TwistStamped >("/lexus3/vehicle_status", 10, std::bind(&WaypointToTarget::vehicleSpeedCallback, this, _1));
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&WaypointToTarget::parametersCallback, this, std::placeholders::_1));
         RCLCPP_INFO_STREAM(this->get_logger(), "waypoint_to_target node started");
         RCLCPP_INFO_STREAM(this->get_logger(), "lookahead_min: " << lookahead_min << " lookahead_max: " << lookahead_max << " mps_alpha: " << mps_alpha << " mps_beta: " << mps_beta);
+        stopping_logic_active.data = false;
     }
 
-private:
+   private:
     double distanceFromWayPoint(const geometry_msgs::msg::Pose &waypoint, const geometry_msgs::msg::Pose &pose_curr)
     {
         double dx = waypoint.position.x - pose_curr.position.x;
@@ -142,11 +162,11 @@ private:
             // slope from lookahead_min to lookahead_max between mps_alpha and mps_beta
             actual_lookahead = (lookahead_max - lookahead_min) / (mps_beta - mps_alpha) * (speed_mps - mps_alpha) + lookahead_min;
         }
+        RCLCPP_INFO_STREAM(this->get_logger(), "Lookahead: " << actual_lookahead << " m" << " Speed: " << speed_mps << " m/s");
         return actual_lookahead;
     }
     geometry_msgs::msg::Point pointAtDistance(geometry_msgs::msg::Point p1, geometry_msgs::msg::Point p2, double distance, geometry_msgs::msg::Point circle_center)
     {
-
         double dx = p2.x - p1.x;
         double dy = p2.y - p1.y;
 
@@ -235,9 +255,9 @@ private:
         cross_track_marker.pose.position.z = 1.8;
         cross_track_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
         cross_track_marker.action = visualization_msgs::msg::Marker::MODIFY;
-        int target_waypoint = 0;                 // target waypoint to be published
-        int first_wp = 0;                        // first waypoint in the trajectory
-        int last_wp = int(msg.poses.size() - 1); // last waypoint in the trajectory
+        int target_waypoint = 0;                  // target waypoint to be published
+        int first_wp = 0;                         // first waypoint in the trajectory
+        int last_wp = int(msg.poses.size() - 1);  // last waypoint in the trajectory
         // determine whether trajectory is linear (loop closure false) circular (loop closure true).
         // loop closure is true, when the first and last waypoint are closer than 4.0 meters
         if (distanceFromWayPoint(msg.poses[first_wp], msg.poses[last_wp]) < 4.0)
@@ -250,7 +270,7 @@ private:
         }
         // RCLCPP_INFO_STREAM(this->get_logger(), "traj_closed_loop: " << traj_closed_loop);
         // find the closest waypoint where distanceFromWayPoint(msg.poses[i], current_pose) is the smallest
-        double smallest_curr_distance = 100000000; // std::numeric_limits<double>::max();
+        double smallest_curr_distance = 100000000;  // std::numeric_limits<double>::max();
         // in a circular loop trajectory, jump to the beginning of the trajectory when the end is reached
         if (traj_closed_loop == true)
         {
@@ -276,6 +296,9 @@ private:
             search_start = first_wp;
             search_end = last_wp;
             reinit = false;
+            status_pub_marker.text = "Init";
+            status_pub_marker.header.stamp = this->now();
+            status_pub_->publish(status_pub_marker);
         }
         for (int i = search_start; i <= search_end; i++)
         {
@@ -310,8 +333,42 @@ private:
         metrics_arr.data[common_wpt::AVG_LAT_DISTANCE] = average_distance;
         metrics_arr.data[common_wpt::MAX_LAT_DISTANCE] = maximum_distance;
         // calculate the adaptive lookahead distance
-        double lookahead_actual = calcLookahead(speed_msg.data);
-
+        double lookahead_actual = calcLookahead(vehicle_speed);
+        metrics_arr.data[common_wpt::ACT_LOOK_DIST] = lookahead_actual;
+        // if it is stopped
+        if (speed_msg.data < 0.05 or stopping_logic_active.data == true)
+        {
+            stopping_logic_active.data = true;
+            // calculate the elapsed time since the last stop
+            // publish the remaining time to stop as a string
+            double stoppped_since = (this->now().nanoseconds() - last_stop_reached_time.nanoseconds()) / 1e9;
+            std::stringstream stream;
+            if (stoppped_since < stop_duration) // seconds
+            {
+                stream << "Stopped [" << std::fixed << std::setprecision(1) << stoppped_since << " s] ";
+                creep_mode_active = false;
+            }
+            if (stoppped_since > stop_duration and stoppped_since < stop_duration + creep_duration)
+            {  // seconds
+                stream << "Creep [ " << std::fixed << std::setprecision(1) << stoppped_since - stop_duration << " s] ";
+                creep_mode_active = true;
+            }
+            if (stoppped_since > stop_duration + creep_duration)
+            {  // seconds
+                stream << "Creep mode disabled ";
+                creep_mode_active = false;
+                stopping_logic_active.data = false;
+            }
+            status_pub_marker.text = stream.str();
+            status_pub_marker.header.stamp = this->now();
+            status_pub_->publish(status_pub_marker);
+        }
+        // if it is moving (stopping logic is not active)
+        else
+        {
+            // keeps track of the last time when the vehicle was stopped (always update the time if not stopped)
+            last_stop_reached_time = this->now();
+        }
         for (int i = closest_waypoint; i <= last_wp; i++)
         {
             // RCLCPP_INFO_STREAM(this->get_logger(), "distanceFromWayPoint: " << distanceFromWayPoint(msg.poses[i], current_pose));
@@ -369,7 +426,7 @@ private:
         }
         if (interpolate_waypoints)
         {
-            // the order should be (distances from the current pose): interpol_waypoint < lookahead < target_waypoint 
+            // the order should be (distances from the current pose): interpol_waypoint < lookahead < target_waypoint
             // if this is not the case, do not use the interpolated waypoint
             if (distanceFromWayPoint(msg.poses[interpol_waypoint], current_pose) > lookahead_actual or distanceFromWayPoint(msg.poses[target_waypoint], current_pose) < lookahead_actual)
             {
@@ -382,7 +439,7 @@ private:
                 geometry_msgs::msg::Point interpolated_pose = pointAtDistance(msg.poses[interpol_waypoint].position, msg.poses[target_waypoint].position, lookahead_actual, current_pose.position);
                 pursuit_goal.pose.position = interpolated_pose;
             }
-            //RCLCPP_INFO_STREAM(this->get_logger(), "I: " << distanceFromWayPoint(msg.poses[interpol_waypoint], current_pose) << "m L: " << lookahead_actual << "m T:"<< distanceFromWayPoint(msg.poses[target_waypoint], current_pose) << "m");
+            // RCLCPP_INFO_STREAM(this->get_logger(), "I: " << distanceFromWayPoint(msg.poses[interpol_waypoint], current_pose) << "m L: " << lookahead_actual << "m T:"<< distanceFromWayPoint(msg.poses[target_waypoint], current_pose) << "m");
         }
         else
         {
@@ -391,7 +448,7 @@ private:
         pursuit_goal.pose.orientation = msg.poses[target_waypoint].orientation;
         pursuit_closest.pose.position = msg.poses[closest_waypoint].position;
         pursuit_closest.pose.orientation = msg.poses[closest_waypoint].orientation;
-        geometry_msgs::msg::Pose pose_global; // a pose to put in the target_pose array
+        geometry_msgs::msg::Pose pose_global;  // a pose to put in the target_pose array
         pose_global.position = msg.poses[target_waypoint].position;
         pose_global.orientation = msg.poses[target_waypoint].orientation;
         // doTransform target_pose[0] to local frame
@@ -413,7 +470,7 @@ private:
             pursuit_closest_local.orientation.w);
         tf2::Matrix3x3 m(q_local);
         m.getRPY(local_cw_roll, local_cw_pitch, local_cw_yaw);
-        if (local_cw_yaw > 1.309 or local_cw_yaw < -1.309) // 75 deg = 1.309 rad
+        if (local_cw_yaw > 1.309 or local_cw_yaw < -1.309)  // 75 deg = 1.309 rad
         {
             RCLCPP_WARN_STREAM(this->get_logger(), "Current waypoint orientation is more than 75 deg [" << std::fixed << std::setprecision(1) << local_cw_yaw * 180 / M_PI << "deg]");
         }
@@ -434,6 +491,12 @@ private:
         pursuit_vizu_arr.markers[2] = cross_track_marker;
         // RCLCPP_INFO_STREAM(this->get_logger(), "transformInv: " << transformInverse.transform.translation.x << ", " << transformInverse.transform.translation.y << ", " << transformInverse.transform.translation.z);
     }
+
+    void vehicleSpeedCallback(const geometry_msgs::msg::TwistStamped::SharedPtr msg)
+    {
+        vehicle_speed = msg->twist.linear.x;
+    }
+
     void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
     {
         // speed data from the target waypoint
@@ -444,20 +507,24 @@ private:
         else
         {
             speed_msg.data = msg.data[metrics_arr.data[common_wpt::CUR_WAYPOINT_ID]];
-        }
-        // RCLCPP_INFO_STREAM(this->get_logger(), "Target speed:" << speed_msg.data << " m/s");
-        // stop at the end of the path (if the trajectory is not a circular loop)
-        if (traj_closed_loop == false)
-        {
-            if (last_waypoint_reached == true)
+            if (creep_mode_active == true)
             {
-                if ((last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 > 5.0)
-                {
-                    speed_msg.data = 0.0;
-                    RCLCPP_INFO_STREAM(this->get_logger(), "STOP: last waypoint reached at more than 5s ago");
-                }
+                speed_msg.data = 2.0;
             }
         }
+        // // RCLCPP_INFO_STREAM(this->get_logger(), "Target speed:" << speed_msg.data << " m/s");
+        // // stop at the end of the path (if the trajectory is not a circular loop)
+        // if (traj_closed_loop == false)
+        // {
+        //     if (last_waypoint_reached == true)
+        //     {
+        //         if ((last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 > 5.0)
+        //         {
+        //             speed_msg.data = 0.0;
+        //             RCLCPP_INFO_STREAM(this->get_logger(), "STOP: last waypoint reached at more than 5s ago");
+        //         }
+        //     }
+        // }
     }
 
     // get tf2 transform from map to base_link
@@ -499,48 +566,55 @@ private:
         target_pub_->publish(target_pose_arr);
         speed_pub_->publish(speed_msg);
         metrics_pub_->publish(metrics_arr);
+        stopping_logic_pub_->publish(stopping_logic_active);
     }
 
     rclcpp::TimerBase::SharedPtr timer_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr goal_pub_;
-    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr speed_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr target_pub_;
-    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr metrics_pub_;
-    rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_w_;
-    rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_s_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_reinit_;
-    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
-    std_msgs::msg::Float32MultiArray metrics_arr; // array of metrics (eg. current lateral distance, average lateral distance, current waypoint ID etc)
+    rclcpp::Publisher< visualization_msgs::msg::MarkerArray >::SharedPtr goal_pub_;
+    rclcpp::Publisher< visualization_msgs::msg::Marker >::SharedPtr status_pub_;
+    rclcpp::Publisher< std_msgs::msg::Float32 >::SharedPtr speed_pub_;
+    rclcpp::Publisher< geometry_msgs::msg::PoseArray >::SharedPtr target_pub_;
+    rclcpp::Publisher< std_msgs::msg::Float32MultiArray >::SharedPtr metrics_pub_;
+    rclcpp::Publisher< std_msgs::msg::Bool >::SharedPtr stopping_logic_pub_;
+    rclcpp::Subscription< geometry_msgs::msg::PoseArray >::SharedPtr sub_w_;
+    rclcpp::Subscription< std_msgs::msg::Float32MultiArray >::SharedPtr sub_s_;
+    rclcpp::Subscription< std_msgs::msg::Bool >::SharedPtr sub_reinit_;
+    rclcpp::Subscription< geometry_msgs::msg::TwistStamped >::SharedPtr sub_veh_speed;
+    std::unique_ptr< tf2_ros::Buffer > tf_buffer_;
+    std::shared_ptr< tf2_ros::TransformListener > tf_listener_{ nullptr };
+    std_msgs::msg::Float32MultiArray metrics_arr;  // array of metrics (eg. current lateral distance, average lateral distance, current waypoint ID etc)
     OnSetParametersCallbackHandle::SharedPtr callback_handle_;
     // parameters
     std::string waypoint_topic = "waypointarray";
-    double lookahead_min = 8.5; // eg. Lexus3 front from base_link: 2.789 + 1.08 = 3.869
+    double lookahead_min = 8.5;  // eg. Lexus3 front from base_link: 2.789 + 1.08 = 3.869
     double lookahead_max = lookahead_min + 15.0;
-    double mps_alpha = 3.0;   // (3*3.6 = 10.8 km/h)
-    double mps_beta = 5.0;    // (5*3.6 = 18 km/h)
-    int closest_waypoint = 0; // closest waypoint to the current pose
+    double mps_alpha = 3.0;    // (3*3.6 = 10.8 km/h)
+    double mps_beta = 5.0;     // (5*3.6 = 18 km/h)
+    int closest_waypoint = 0;  // closest waypoint to the current pose
     float average_distance = 0.0, maximum_distance = 0.0;
     int average_distance_count = 0;
     geometry_msgs::msg::Pose current_pose;
     geometry_msgs::msg::TransformStamped transformInverse;
-    rclcpp::Time last_waypoint_reached_time;
-    bool last_waypoint_reached = false;
+    rclcpp::Time last_waypoint_reached_time, last_stop_reached_time, last_stoppped_since;
+    bool last_waypoint_reached = false, creep_mode_active = false;  // creep_mode_active - mimics the behavior of internal combustion engine vehicles that slowly move forward when the brake is released
     bool static_speed_enabled = false;
-    bool traj_closed_loop = false; // Trajectory loop closure bool, if the trajectory is linear/open loop: false, if circular/cloded loop: true
+    bool traj_closed_loop = false;  // Trajectory loop closure bool, if the trajectory is linear/open loop: false, if circular/cloded loop: true
     bool reinit = true, interpolate_waypoints = false;
-    double static_speed; // value of static speed in m/s
-    visualization_msgs::msg::Marker pursuit_goal, pursuit_closest, cross_track_marker;
+    double static_speed;  // value of static speed in m/s
+    double stop_duration = 10.0, creep_duration = 5.0;
+    double vehicle_speed = 0.0; 
+    visualization_msgs::msg::Marker pursuit_goal, pursuit_closest, cross_track_marker, status_pub_marker;
     visualization_msgs::msg::MarkerArray pursuit_vizu_arr;
     geometry_msgs::msg::PoseArray target_pose_arr;
     std::string tf_child_frame_id, tf_frame_id;
+    std_msgs::msg::Bool stopping_logic_active;
     std_msgs::msg::Float32 speed_msg;
 };
 
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<WaypointToTarget>());
+    rclcpp::spin(std::make_shared< WaypointToTarget >());
     rclcpp::shutdown();
     return 0;
 }
