@@ -17,11 +17,11 @@ def generate_launch_description():
                 {"return_length_": 4.0},                #a visszatero szakasz hossza (m)
                 {"offset_distance_": 3.0},              #a trapez szelessege (m), az eredeti uttol valo tavolsag
                 {"avoidance_direction": "left"},        #elkerules iranya
-                {"lookahead_distance_": 50},           #az eloretekintes hossza (m)
+                {"lookahead_distance_": 50},            #az eloretekintes hossza (m)
                 {"min_distance_treshold": 4.0},         #Az akadaly és a waypont kozotti tavolsag, amely alatt az akadalyt figyelembe vesszuk (m) 
                 {"sensitivity": 2.0},                   #az akadaly erzekenysege, ennyi elofordulas kell a figyelembe vetelhez minimum (db)
-                {"waypoint_topic":"waypointarray"},     #a waypointokat tartalmazo topik
-                {"pose_topic":"rotated_pose"},          #Az auto poziciojat tartalmazo topik
+                {"waypoint_topic":"lexus3/waypointarray"},     #a waypointokat tartalmazo topik
+                {"pose_topic":"lexus3/current_pose"},          #Az auto poziciojat tartalmazo topik
                 {"obstacle_topic":"clustered_marker"},  #Az akadalyokat tartalmazo topik, marker array
                 {"lidar_frame":"lexus3/os_center_a_laser_data_frame"}, #melyik lidar frame-et hasznaljuk az akadalyok detektalasahoz
             ],
