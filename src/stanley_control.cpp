@@ -48,13 +48,13 @@ class StanleyControl : public rclcpp::Node
       {
         wheelbase = param.as_double();
       }
-      if (param_name == "heading_err_rate")
+      if (param_name == "heading_err_gain")
       {
-        heading_err_rate = param.as_double();
+        heading_err_gain = param.as_double();
       }
-      if (param_name == "cross_track_err_rate")
+      if (param_name == "cross_track_err_gain")
       {
-        cross_track_err_rate = param.as_double();
+        cross_track_err_gain = param.as_double();
       }   
     }
     return result;
@@ -74,18 +74,21 @@ public:
     this->declare_parameter<std::string>("waypoint_topic", "");
     this->declare_parameter<std::string>("cmd_topic", cmd_topic);
     this->declare_parameter<float>("wheelbase", wheelbase);
-    this->declare_parameter<float>("heading_err_rate", heading_err_rate, descriptor_slider);
-    this->declare_parameter<float>("pursuit_rate", pursuit_rate, descriptor_slider);
-    this->declare_parameter<float>("cross_track_err_rate", cross_track_err_rate, descriptor_slider);
+    this->declare_parameter<float>("heading_err_gain", heading_err_gain, descriptor_slider);
+    this->declare_parameter<float>("pursuit_gain", pursuit_gain, descriptor_slider);
+    this->declare_parameter<float>("cross_track_err_gain", cross_track_err_gain, descriptor_slider);
     this->get_parameter("waypoint_topic", waypoint_topic);
     this->get_parameter("cmd_topic", cmd_topic);
     this->get_parameter("wheelbase", wheelbase);
-    this->get_parameter("heading_err_rate", heading_err_rate);
-    this->get_parameter("cross_track_err_rate", cross_track_err_rate);
-    this->get_parameter("pursuit_rate", pursuit_rate);
+    this->get_parameter("heading_err_gain", heading_err_gain);
+    this->get_parameter("cross_track_err_gain", cross_track_err_gain);
+    this->get_parameter("pursuit_gain", pursuit_gain);
 
     goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_topic, 10);
     reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("control_reinit", 10);
+    deb_c_pub = this->create_publisher<std_msgs::msg::Float32>("debug_cross_track_err", 10);
+    deb_h_pub = this->create_publisher<std_msgs::msg::Float32>("debug_heading_err", 10);
+    deb_p_pub = this->create_publisher<std_msgs::msg::Float32>("debug_pursuit_err", 10);
     sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&StanleyControl::waypointCallback, this, _1));
     sub_s_ = this->create_subscription<std_msgs::msg::Float32>("pursuitspeedtarget", 10, std::bind(&StanleyControl::speedCallback, this, _1));
     sub_m_ = this->create_subscription<std_msgs::msg::Float32MultiArray>("metrics_wayp", 10, std::bind(&StanleyControl::metricsCallback, this, _1));
@@ -106,11 +109,21 @@ private:
     float lookahead_distance = sqrt(pow(goal_x, 2) + pow(goal_y, 2));
     // cross-track error
     float purs_steering_angle = atan2(2.0 * wheelbase * sin(alpha), lookahead_distance);
-    float cross_track_error = cur_cross_track_err * cross_track_err_rate;
+    float pursuit_error = pursuit_gain * purs_steering_angle;
+    float cross_track_error = cur_cross_track_err * cross_track_err_gain;
     // heading error
-    float heading_error = goal_yaw * heading_err_rate;
-    RCLCPP_INFO_STREAM(this->get_logger(), "purs: " << std::fixed << std::setprecision(2) << pursuit_rate * purs_steering_angle << ", crosstrackE: " << cross_track_error << ", headingE: " << heading_error);
-    return pursuit_rate * purs_steering_angle + cross_track_error + heading_error;
+    float heading_error = goal_yaw * heading_err_gain;
+    RCLCPP_INFO_STREAM(this->get_logger(), "purs: " << std::fixed << std::setprecision(2) << pursuit_gain * purs_steering_angle << ", crosstrackE: " << cross_track_error << ", headingE: " << heading_error);
+    
+    std_msgs::msg::Float32 deb_c, deb_h, deb_p;
+    deb_c.data = cross_track_error;
+    deb_h.data = heading_error;
+    deb_p.data = pursuit_error;
+    deb_c_pub->publish(deb_c);
+    deb_h_pub->publish(deb_h);
+    deb_p_pub->publish(deb_p);
+    
+    return pursuit_error + cross_track_error + heading_error;
   }
 
   void speedCallback(const std_msgs::msg::Float32 &msg) const
@@ -133,7 +146,7 @@ private:
 
   void metricsCallback(const std_msgs::msg::Float32MultiArray &metrics_arr)
   {
-    cur_cross_track_err = metrics_arr.data[common_wpt::CUR_LAT_DIST_SIGNED];
+    cur_cross_track_err = metrics_arr.data[common_wpt::CUR_CROSS_TRACK];
     // cur_cross_track_abs = metrics_arr.data[common_wpt::CUR_LAT_DIST_ABS];
   }
 
@@ -156,15 +169,16 @@ private:
   // parameters
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr goal_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reinit_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr deb_c_pub, deb_h_pub, deb_p_pub;
   rclcpp::TimerBase::SharedPtr timer_;
   float wheelbase = 2.789;
   std::string cmd_topic;
   float cur_cross_track_err = 0.0;
   float cur_cross_track_abs = 0.0;
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
-  float heading_err_rate = 0.05;     // TODO: tune
-  float cross_track_err_rate = 0.05; // TODO: tune
-  float pursuit_rate = 0.9;          // TODO: tune
+  float heading_err_gain = 1.00;     // TODO: tune
+  float cross_track_err_gain = 1.00; // TODO: tune
+  float pursuit_gain = 0.5;          // TODO: tune
 };
 
 int main(int argc, char **argv)

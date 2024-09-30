@@ -73,6 +73,7 @@ It also provides a `/metrics_wayp` array topic with the following  elements:
 |`[5]` | target waypoint ID | `TRG_WAYPOINT_ID`
 |`[6]` | target waypoint longitudinal distance (similar to lookahed distance, but at a waypoint) | `TRG_WAY_LON_DIST`
 |`[7]` | actual lookahead distance | `ACT_LOOK_DIST`
+|`[8]` | current cross-track error | `CUR_CROSS_TRACK`
 
 
 <img src="csv/lookahead01.svg" width=60% />

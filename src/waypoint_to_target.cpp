@@ -305,10 +305,24 @@ private:
             }
         }
         average_distance_count += 1;
+
+        // calculate the current cross-track error (orientation diff of the closest waypoint and current pose)
+        tf2::Quaternion q_closest(msg.poses[closest_waypoint].orientation.x, msg.poses[closest_waypoint].orientation.y, msg.poses[closest_waypoint].orientation.z, msg.poses[closest_waypoint].orientation.w);
+        tf2::Matrix3x3 m_closest(q_closest);
+        double closest_roll, closest_pitch, closest_yaw;
+        m_closest.getRPY(closest_roll, closest_pitch, closest_yaw);
+        // calculate the current yaw of the vehicle
+        tf2::Quaternion q_curr(current_pose.orientation.x, current_pose.orientation.y, current_pose.orientation.z, current_pose.orientation.w);
+        tf2::Matrix3x3 m_curr(q_curr);
+        double current_roll, current_pitch, current_yaw;
+        double cross_yaw_diff = closest_yaw - current_yaw;
+
         metrics_arr.data[common_wpt::CUR_LAT_DIST_ABS] = smallest_curr_distance;
         metrics_arr.data[common_wpt::CUR_WAYPOINT_ID] = closest_waypoint;
+        metrics_arr.data[common_wpt::CUR_CROSS_TRACK] = cross_yaw_diff;
         metrics_arr.data[common_wpt::AVG_LAT_DISTANCE] = average_distance;
         metrics_arr.data[common_wpt::MAX_LAT_DISTANCE] = maximum_distance;
+
         // calculate the adaptive lookahead distance
         double lookahead_actual = calcLookahead(speed_msg.data);
         metrics_arr.data[common_wpt::ACT_LOOK_DIST] = lookahead_actual;
