@@ -6,6 +6,8 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/transform_listener.h>
 #include <std_msgs/msg/float32.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
 
 
 
@@ -187,6 +189,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     std::vector<int> repeated_indices;
     std::unordered_map<int, int> waypoint_frame_counts;
     std::vector<int> sensitive_waypoints;
+    std::vector<geometry_msgs::msg::PointStamped::SharedPtr> points_out;
 
 
 public:
@@ -202,7 +205,11 @@ public:
             int lookahead_distance_index = closest_waypoint_index + lookahead_distance_;
             lookahead_distance_index = lookahead_distance_index % waypoints_size;
 
-
+            //publishMarkers(waypoints_);
+            publishDebugMarkers(closest_waypoint_index, start_index, end_index, first_index, last_index, waypoints_,lookahead_distance_index);
+            RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, first_index %d,last_index %d,avoidence_start_index: %d, avoidence_end_index: %d , is_calculated: %d, closest_waypoint_index:%d,is_first_run %s, Is avoiding: %s" , start_index, end_index,first_index,last_index, avoidance_start_index,avoidance_end_index , is_calculated, closest_waypoint_index, first_run ? "true" : "false" ,is_avoiding ? "true" : "false" );
+        
+            
           
             if (objects_ != nullptr)
             {
@@ -227,90 +234,19 @@ public:
                                 geometry_msgs::msg::TransformStamped transformStamped = 
                                 tf_buffer_->lookupTransform("map", point_in.header.frame_id, tf2::TimePointZero);
 
-                                std::vector<geometry_msgs::msg::PointStamped::SharedPtr> points_out;
+                                // std::vector<geometry_msgs::msg::PointStamped::SharedPtr> points_out;
 
                                 //geometry_msgs::msg::PointStamped point_out;
                                 auto point_out = std::make_shared<geometry_msgs::msg::PointStamped>();
                                 tf2::doTransform(point_in, *point_out, transformStamped);
 
                                 points_out.push_back(point_out);                             
+                              
                                 
-                               
-                                if (!is_calculated && !is_avoiding)
-                                {
-                                    std::tie(first_index, last_index) = processFrame(points_out, closest_waypoint_index,lookahead_distance_index, waypoints_);
-                                    if (first_index != -1 && last_index != -1)
-                                    {
-                                        is_calculated = true;
-                                    }                                    
-                                }
-
-
-                                if (is_calculated && !is_avoiding)
-                                {      
-                                    //RCLCPP_INFO(this->get_logger(), "first_index: %d, last_index: %d, start_index: %d, end_index: %d", first_index, last_index, start_index, end_index);
-                                    std::tie(start_index, end_index,avoidance_start_index,avoidance_end_index ) = get_start_end_index(first_index, last_index);
-                                    
-                                    if (start_index != -1 && end_index != -1)
-                                    {
-                                        is_avoiding = true;
-                                    }
-
-                                }
-
-                                if (is_calculated && is_avoiding)
-                                {
-                                    if (closest_waypoint_index < start_index)
-                                    {
-                                        if (!is_trapezoid && start_index != -1 && end_index != -1 && start_index < end_index)
-                                        {
-                                            RCLCPP_INFO(this->get_logger(), "tervezes");
-                                            double distance_first_start = distanceBetweenPoints(waypoints_->poses[first_index], waypoints_->poses[start_index]);
-                                            double distance_first_avoidance_end = distanceBetweenPoints(waypoints_->poses[first_index], waypoints_->poses[avoidance_end_index]);
-                                            double distance_first_avoidance_start = distanceBetweenPoints(waypoints_->poses[first_index], waypoints_->poses[avoidance_start_index]);
-                                            double distance_first_end = distanceBetweenPoints(waypoints_->poses[first_index], waypoints_->poses[end_index]);
-                                            calculateTrapezoid(waypoints_, closest_waypoint_index,start_index, end_index, detour_length_, return_length_, offset_distance_, avoidance_direction, distance_first_start, distance_first_avoidance_end, distance_first_avoidance_start, distance_first_end);
-                                            is_trapezoid = true;
-                                            
-                                        }
-                                        first_run = false;
-                                    }
-                                    else if (closest_waypoint_index > end_index )
-                                    {
-                                        
-                                        waypoint_frame_counts.clear();
-                                        sensitive_waypoints.clear();
-                                        // Reset variables
-                                        is_calculated = false;
-                                        first_index = -1;
-                                        last_index = -1;
-                                        start_index = -1;
-                                        end_index = -1;
-                                        is_trapezoid = false;
-                                        actual_len_of_avoid = 0.0;
-                                        first_run = true;
-                                        is_avoiding = false;
-                                        RCLCPP_INFO(this->get_logger(), "Resetting variables");
-                                        
-                                        
-                                    }
-                                    else if (closest_waypoint_index >= start_index && closest_waypoint_index <= end_index)
-                                    {
-                                        if (!is_trapezoid)
-                                        {
-                                            RCLCPP_INFO(this->get_logger(), "PARAMETER SET is NOT avaible");
-                                            
-                                        }
-                                    }
-                                    
-                                        
-                                }                                           
-                                                                                                                                                       
-                                publishMarkers(waypoints_);
-                                publishDebugMarkers(closest_waypoint_index, start_index, end_index, first_index, last_index, waypoints_,lookahead_distance_index);
-                                RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, first_index %d,last_index %d,avoidence_start_index: %d, avoidence_end_index: %d , is_calculated: %d, closest_waypoint_index:%d,is_first_run %s, Is avoiding: %s" , start_index, end_index,first_index,last_index, avoidance_start_index,avoidance_end_index , is_calculated, closest_waypoint_index, first_run ? "true" : "false" ,is_avoiding ? "true" : "false" );
                                 
+                                                                
                             }
+
                         }
                         catch (tf2::TransformException &ex)
                         {
@@ -322,9 +258,122 @@ public:
             else
             {
                 RCLCPP_INFO(this->get_logger(), "No markers received");
+                
             }
+
+            if (!is_calculated && !is_avoiding)
+            {
+                //RCLCPP_INFO(this->get_logger(), "IS CALCULATED FALSE , IS AVOIDING FALSE first_index: %d, last_index: %d, start_index: %d, end_index: %d", first_index, last_index, start_index, end_index);
+                std::tie(first_index, last_index) = processFrame(points_out, closest_waypoint_index,lookahead_distance_index, waypoints_);
+                if (first_index != -1 && last_index != -1)
+                {
+                    is_calculated = true;
+                }                                    
+            }
+
+
+            else if (is_calculated && !is_avoiding)
+            {      
+                RCLCPP_INFO(this->get_logger(), "IS CALCULATED TRUE , IS AVOIDING FALSE first_index: %d, last_index: %d, start_index: %d, end_index: %d", first_index, last_index, start_index, end_index);
+                std::tie(start_index, end_index,avoidance_start_index,avoidance_end_index ) = get_start_end_index(first_index, last_index);
+                
+                if (start_index != -1 && end_index != -1)
+                {
+                    is_avoiding = true;
+                }
+
+            }
+
+            else if (is_calculated && is_avoiding)
+            {
+                //RCLCPP_INFO(this->get_logger(), "IS CALCULATED TRUE , IS AVOIDING TRUE first_index: %d, last_index: %d, start_index: %d, end_index: %d", first_index, last_index, start_index, end_index);
+                if (!is_trapezoid && start_index != -1 && end_index != -1)
+                {
+                    RCLCPP_INFO(this->get_logger(), "tervezes, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
+                    double distance_first_start = distanceBetweenPoints(waypoints_->poses[first_index], waypoints_->poses[start_index]);
+                    double distance_first_avoidance_end = distanceBetweenPoints(waypoints_->poses[first_index], waypoints_->poses[avoidance_end_index]);
+                    double distance_first_avoidance_start = distanceBetweenPoints(waypoints_->poses[first_index], waypoints_->poses[avoidance_start_index]);
+                    double distance_first_end = distanceBetweenPoints(waypoints_->poses[first_index], waypoints_->poses[end_index]);
+                    calculateTrapezoid(waypoints_, closest_waypoint_index,start_index, end_index, detour_length_, return_length_, offset_distance_, avoidance_direction, distance_first_start, distance_first_avoidance_end, distance_first_avoidance_start, distance_first_end);
+                    is_trapezoid = true;
+                    
+                }
+                first_run = false;
+        
+                
+        
+                if (!is_trapezoid)
+                {
+                    RCLCPP_INFO(this->get_logger(), "PARAMETER SET is NOT avaible");
+                    calculateTrapezoid(waypoints_, closest_waypoint_index,start_index, end_index, detour_length_, return_length_, offset_distance_, avoidance_direction, distance_first_start, distance_first_avoidance_end, distance_first_avoidance_start, distance_first_end);
+                    
+                }
+            }    
+
+                // if (closest_waypoint_index == end_index)
+                // {
+                //     is_calculated = false;
+                //     is_avoiding = false;
+                //     first_index = -1;
+                //     last_index = -1;
+                //     start_index = -1;
+                //     end_index = -1;
+                //     is_trapezoid = false;
+                //     actual_len_of_avoid = 0.0;
+                //     first_run = true;
+                // }
+
+            //RCLCPP_INFO(this->get_logger(), "end_index: %d", end_index);
+        
+
+            
+
+            // if (is_calculated && is_avoiding && start_index < end_index && closest_waypoint_index > end_index && closest_waypoint_index < lookahead_distance_index) 
+            // {
+            //     RCLCPP_INFO(this->get_logger(), "Resetting variables,AAAAAAAAAAAAA, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
+            //     waypoint_frame_counts.clear();
+            //     sensitive_waypoints.clear();
+            //     // Reset variables
+            //     is_calculated = false;
+            //     first_index = -1;
+            //     last_index = -1;
+            //     start_index = -1;
+            //     end_index = -1;
+            //     is_trapezoid = false;
+            //     actual_len_of_avoid = 0.0;
+            //     first_run = true;
+            //     is_avoiding = false;
+            // }
+
+            // if (is_calculated && is_avoiding && start_index > end_index && closest_waypoint_index - waypoints_size > end_index && closest_waypoint_index - waypoints_size < start_index && closest_waypoint_index > lookahead_distance_index)
+            // {
+            //     RCLCPP_INFO(this->get_logger(), "Resetting variables,BBBBBBBBBBBBBB, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
+            //     waypoint_frame_counts.clear();
+            //     sensitive_waypoints.clear();
+            //     // Reset variables
+            //     is_calculated = false;
+            //     first_index = -1;
+            //     last_index = -1;
+            //     start_index = -1;
+            //     end_index = -1;
+            //     is_trapezoid = false;
+            //     actual_len_of_avoid = 0.0;
+            //     first_run = true;
+            //     is_avoiding = false;
+            // }
+
+                
+                    
+            // }                                           
+                                                                                                                                    
+            publishMarkers(waypoints_);
+            // publishDebugMarkers(closest_waypoint_index, start_index, end_index, first_index, last_index, waypoints_,lookahead_distance_index);
+            // // RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, first_index %d,last_index %d,avoidence_start_index: %d, avoidence_end_index: %d , is_calculated: %d, closest_waypoint_index:%d,is_first_run %s, Is avoiding: %s" , start_index, end_index,first_index,last_index, avoidance_start_index,avoidance_end_index , is_calculated, closest_waypoint_index, first_run ? "true" : "false" ,is_avoiding ? "true" : "false" );
+            
+
                 
         }
+
     }
 
     void lane_callback(const geometry_msgs::msg::PoseArray::SharedPtr msg)
@@ -394,6 +443,20 @@ public:
             double orientation = std::atan2(delta_y, delta_x);
             
             return orientation;
+        }
+
+    double getYawFromQuaternion(const geometry_msgs::msg::Quaternion& quat)
+        {
+            tf2::Quaternion q(
+                quat.x,
+                quat.y,
+                quat.z,
+                quat.w
+            );
+            tf2::Matrix3x3 m(q);
+            double roll, pitch, yaw;
+            m.getRPY(roll, pitch, yaw);
+            return yaw;
         }
 
     
@@ -502,18 +565,36 @@ public:
         double last_x = waypoints_->poses[last_index].position.x;
         double last_y = waypoints_->poses[last_index].position.y;
 
-        double initial_orientation = compute_orientation(first_x, first_y, last_x, last_y);
+        // if first and last index are the same, initial orientation is the waypoints orientation else it is the orientation between the first and last index
+        double initial_orientation;
+
+        if (first_index == last_index)
+        {
+            initial_orientation = getYawFromQuaternion(waypoints_->poses[first_index].orientation);
+        }
+        else
+        {
+            initial_orientation = compute_orientation(first_x, first_y, last_x, last_y);
+        }
+
+        //print out the initial orientation and the first and last index
+        RCLCPP_INFO(this->get_logger(), "initial_orientation: %f, first_index: %d, last_index: %d", initial_orientation, first_index, last_index);
     
         start_index = find_closest_waypoint(first_x - detour_ * std::cos(initial_orientation), first_y - detour_ * std::sin(initial_orientation), *waypoints_);
         end_index = find_closest_waypoint(first_x + return_  * std::cos(initial_orientation), first_y + return_ * std::sin(initial_orientation), *waypoints_);
         int avoidance_start_index = find_closest_waypoint(first_x - avoid_detour_length * std::cos(initial_orientation), first_y - avoid_detour_length * std::sin(initial_orientation), *waypoints_);
         int avoidance_end_index = find_closest_waypoint(first_x +  avoid_return_length  * std::cos(initial_orientation),first_y  + avoid_return_length  * std::sin(initial_orientation), *waypoints_);
 
-        // If end_index is less than start_index, swap them
-        if (end_index < start_index)
-        {
-            std::swap(end_index, start_index);
-        }
+        //If end_index is less than start_index, swap them
+
+        // if (end_index < start_index)
+        // {
+        //     std::swap(end_index, start_index);
+        // }
+
+        //check the the distancetwo point and the closer to the closest waypoint is the start point
+
+        
 
         return std::make_tuple(start_index, end_index,avoidance_start_index,avoidance_end_index);
     }
@@ -522,13 +603,14 @@ public:
     void calculateTrapezoid(geometry_msgs::msg::PoseArray::SharedPtr waypoints_, int closest_waypoint_index, int start_index, int end_index, double detour_length_, double return_length_, double offset_distance_, std::string avoidance_direction, double distance_first_start, double distance_first_avoidance_end, double distance_first_avoidance_start, double distance_first_end) 
     {
 
-        double avoid_length = avoid_detour_length + avoid_return_length;
-        //RCLCPP_INFO(this->get_logger(), "detour_length_, avoid_length, return_length_, offset_distance_: %f, %f, %f, %f", detour_length_, avoid_length, return_length_, offset_distance_);
-
-        //RCLCPP_INFO(this->get_logger(), "actual_len_of_avoid: %f, detour_length_: %f, avoid_length: %f, return_length_: %f, distance_first_start: %f,distance_first_avoidance_end: %f,distance_first_avoidance_start: %f,distance_first_end: %f", actual_len_of_avoid, detour_length_, avoid_length, return_length_, distance_first_start, distance_first_avoidance_end, distance_first_avoidance_start, distance_first_end);
+        double avoid_length = avoid_detour_length + avoid_return_length;        
 
         for (int i = start_index; i <= end_index; ++i)
         {
+            if (i >= waypoints_size)
+            {
+                i = 0;
+            }
             double x1 = waypoints_->poses[i].position.x;
             double y1 = waypoints_->poses[i].position.y;
             double x2, y2;
@@ -640,6 +722,8 @@ public:
     void publishMarkers( geometry_msgs::msg::PoseArray::SharedPtr waypoints_)
     {       
             geometry_msgs::msg::PoseArray::SharedPtr previous_waypoints_;
+
+            
             
             if (previous_waypoints_ == nullptr || waypoints_->poses != previous_waypoints_->poses)
             {
