@@ -20,6 +20,10 @@ find_package(tf2 REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(PCL REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -34,7 +38,10 @@ set(ament_dependencies
   tf2
   tf2_msgs
   tf2_ros
-  tf2_geometry_msgs  
+  tf2_geometry_msgs 
+  PCL 
+  pcl_conversions 
+  sensor_msgs 
 )
 
 include_directories(
@@ -61,6 +68,8 @@ add_executable(echo_metrics src/echo_metrics.cpp)
 ament_target_dependencies(echo_metrics  ${ament_dependencies} )
 add_executable(obstacle_avoidance_trapezoid src/obstacle_avoidance_trapezoid.cpp)
 ament_target_dependencies(obstacle_avoidance_trapezoid  ${ament_dependencies} )
+add_executable(x_filter src/x_filter.cpp)
+ament_target_dependencies(x_filter ${ament_dependencies})
 
 
 if(BUILD_TESTING)
@@ -89,5 +98,6 @@ install(TARGETS
   stanley_control
   echo_metrics
   obstacle_avoidance_trapezoid
+  x_filter
   DESTINATION lib/${PROJECT_NAME})
 ament_package()
