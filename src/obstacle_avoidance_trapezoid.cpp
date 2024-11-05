@@ -2,6 +2,7 @@
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include <tf2_ros/buffer.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/transform_listener.h>
@@ -36,55 +37,57 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
             {
                 detour_length_ = param.as_double();
             }
-            if (param.get_name() == "avoid_detour_length")
+           else if (param.get_name() == "avoid_detour_length")
             {
                 avoid_detour_length = param.as_double();
             }
-            if (param.get_name() == "return_length_")
+           else if (param.get_name() == "return_length_")
             {
                 return_length_ = param.as_double();
             }
-            if (param.get_name() == "avoid_return_length")
+            else if (param.get_name() == "avoid_return_length")
             {
                 avoid_return_length = param.as_double();
             }
-            if (param.get_name() == "offset_distance_")
+            else if (param.get_name() == "offset_distance_")
             {
                 offset_distance_ = param.as_double();
             }
-            if (param.get_name() == "avoidance_direction")
+            else if (param.get_name() == "avoidance_direction")
             {
                 avoidance_direction = param.as_string();
             }
-            if (param.get_name() == "lookahead_distance_")
+            else if (param.get_name() == "lookahead_distance_")
             {
                 lookahead_distance_ = param.as_double();
             }
-            if (param.get_name() == "sensitivity")
+            else if (param.get_name() == "sensitivity")
             {
                 sensitivity = param.as_double();
             }
-            if (param.get_name() == "min_distance_treshold")
+            else if (param.get_name() == "min_distance_treshold")
             {
                 min_distance_treshold = param.as_double();
             }
-            if (param.get_name() == "waypoint_topic")
+            else if (param.get_name() == "waypoint_topic")
             {
                 waypoint_topic = param.as_string();
             }
-            if (param.get_name() == "pose_topic")
+            else if (param.get_name() == "pose_topic")
             {
                 pose_topic = param.as_string();
             }
-            if (param.get_name() == "obstacle_topic")
+            else if (param.get_name() == "obstacle_topic")
             {
                 obstacle_topic = param.as_string();
             }
-            if (param.get_name() == "lidar_frame")
+            else if (param.get_name() == "lidar_frame")
             {
                 lidar_frame = param.as_string();
             }
             
+            
+                        
         }
         return result;
     }
@@ -107,6 +110,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->declare_parameter("pose_topic", "rotated_pose"); //default
         this->declare_parameter("obstacle_topic", "clustered_marker"); //default
         this->declare_parameter("lidar_frame", "lexus3/os_center_a_laser_data_frame"); //default
+        this->declare_parameter<bool>("odometry_topic", true); //default
         
 
         this->get_parameter("detour_length_", detour_length_);
@@ -122,6 +126,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->get_parameter("pose_topic", pose_topic);
         this->get_parameter("obstacle_topic", obstacle_topic);
         this->get_parameter("lidar_frame", lidar_frame);
+        this->get_parameter("odometry_topic", odometry_topic);
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&ObstacleAvoidanceTrapezoid::parametersCallback, this, _1));
 
 
@@ -129,7 +134,9 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
         lane_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic,10 ,std::bind(&ObstacleAvoidanceTrapezoid::lane_callback,this, std::placeholders::_1));
+       
         current_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(pose_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::current_pose_callback, this, std::placeholders::_1));
+        
         marker_array_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(obstacle_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::marker_array_callback, this, std::placeholders::_1));
         marker_pub = this->create_publisher<visualization_msgs::msg::MarkerArray>("obstacle_avoidance_waypoint_markers", 10);
         pose_array_pub = this->create_publisher<geometry_msgs::msg::PoseArray>("obstacle_avoidance_pose_array_topic", 10);
@@ -179,6 +186,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     bool is_trapezoid = false;
     bool first_run = true;
     bool is_avoiding = false;
+    bool odometry_topic = false; //default
     
     std::vector<int> closest_waypoint_index_m;
 
@@ -261,6 +269,11 @@ public:
                 
             }
 
+
+            
+             RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, closest_waypoint_index:%d,lookahead:%d,waypoints size:%d" , start_index, end_index, closest_waypoint_index,lookahead_distance_index,waypoints_size);
+        
+
             if (!is_calculated && !is_avoiding)
             {
                 //RCLCPP_INFO(this->get_logger(), "IS CALCULATED FALSE , IS AVOIDING FALSE first_index: %d, last_index: %d, start_index: %d, end_index: %d", first_index, last_index, start_index, end_index);
@@ -310,57 +323,57 @@ public:
                 }
             }    
 
-                // if (closest_waypoint_index == end_index)
-                // {
-                //     is_calculated = false;
-                //     is_avoiding = false;
-                //     first_index = -1;
-                //     last_index = -1;
-                //     start_index = -1;
-                //     end_index = -1;
-                //     is_trapezoid = false;
-                //     actual_len_of_avoid = 0.0;
-                //     first_run = true;
-                // }
+                if (closest_waypoint_index == end_index)
+                {
+                    is_calculated = false;
+                    is_avoiding = false;
+                    first_index = -1;
+                    last_index = -1;
+                    start_index = -1;
+                    end_index = -1;
+                    is_trapezoid = false;
+                    actual_len_of_avoid = 0.0;
+                    first_run = true;
+                }
 
-            //RCLCPP_INFO(this->get_logger(), "end_index: %d", end_index);
+           
         
 
             
 
-            // if (is_calculated && is_avoiding && start_index < end_index && closest_waypoint_index > end_index && closest_waypoint_index < lookahead_distance_index) 
-            // {
-            //     RCLCPP_INFO(this->get_logger(), "Resetting variables,AAAAAAAAAAAAA, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
-            //     waypoint_frame_counts.clear();
-            //     sensitive_waypoints.clear();
-            //     // Reset variables
-            //     is_calculated = false;
-            //     first_index = -1;
-            //     last_index = -1;
-            //     start_index = -1;
-            //     end_index = -1;
-            //     is_trapezoid = false;
-            //     actual_len_of_avoid = 0.0;
-            //     first_run = true;
-            //     is_avoiding = false;
-            // }
+            if (is_calculated && is_avoiding && start_index < end_index && closest_waypoint_index > end_index && closest_waypoint_index < lookahead_distance_index) 
+            {
+                RCLCPP_INFO(this->get_logger(), "Resetting variables,AAAAAAAAAAAAA, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
+                waypoint_frame_counts.clear();
+                sensitive_waypoints.clear();
+                // Reset variables
+                is_calculated = false;
+                first_index = -1;
+                last_index = -1;
+                start_index = -1;
+                end_index = -1;
+                is_trapezoid = false;
+                actual_len_of_avoid = 0.0;
+                first_run = true;
+                is_avoiding = false;
+            }
 
-            // if (is_calculated && is_avoiding && start_index > end_index && closest_waypoint_index - waypoints_size > end_index && closest_waypoint_index - waypoints_size < start_index && closest_waypoint_index > lookahead_distance_index)
-            // {
-            //     RCLCPP_INFO(this->get_logger(), "Resetting variables,BBBBBBBBBBBBBB, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
-            //     waypoint_frame_counts.clear();
-            //     sensitive_waypoints.clear();
-            //     // Reset variables
-            //     is_calculated = false;
-            //     first_index = -1;
-            //     last_index = -1;
-            //     start_index = -1;
-            //     end_index = -1;
-            //     is_trapezoid = false;
-            //     actual_len_of_avoid = 0.0;
-            //     first_run = true;
-            //     is_avoiding = false;
-            // }
+            if (is_calculated && is_avoiding && start_index > end_index && closest_waypoint_index - waypoints_size > end_index && closest_waypoint_index - waypoints_size < start_index && closest_waypoint_index > lookahead_distance_index)
+            {
+                RCLCPP_INFO(this->get_logger(), "Resetting variables,BBBBBBBBBBBBBB, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
+                waypoint_frame_counts.clear();
+                sensitive_waypoints.clear();
+                // Reset variables
+                is_calculated = false;
+                first_index = -1;
+                last_index = -1;
+                start_index = -1;
+                end_index = -1;
+                is_trapezoid = false;
+                actual_len_of_avoid = 0.0;
+                first_run = true;
+                is_avoiding = false;
+            }
 
                 
                     
@@ -393,7 +406,7 @@ public:
         }
         
     }
-
+    
 
     void current_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
     {
@@ -970,14 +983,17 @@ public:
         }
     }
 
+
+    
     rclcpp::TimerBase::SharedPtr timer_;
-    rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr lane_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr lane_sub_;   
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr current_pose_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_array_sub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub;
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_marker_pub;
     OnSetParametersCallbackHandle::SharedPtr callback_handle_;
+
 };
 
 int main(int argc, char **argv)
