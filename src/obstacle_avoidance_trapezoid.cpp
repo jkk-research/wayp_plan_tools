@@ -187,6 +187,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     bool first_run = true;
     bool is_avoiding = false;
     bool odometry_topic = false; //default
+    bool new_lap;
     
     std::vector<int> closest_waypoint_index_m;
 
@@ -213,10 +214,17 @@ public:
             int lookahead_distance_index = closest_waypoint_index + lookahead_distance_;
             lookahead_distance_index = lookahead_distance_index % waypoints_size;
 
+        
+
             //publishMarkers(waypoints_);
             publishDebugMarkers(closest_waypoint_index, start_index, end_index, first_index, last_index, waypoints_,lookahead_distance_index);
-            RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, first_index %d,last_index %d,avoidence_start_index: %d, avoidence_end_index: %d , is_calculated: %d, closest_waypoint_index:%d,is_first_run %s, Is avoiding: %s" , start_index, end_index,first_index,last_index, avoidance_start_index,avoidance_end_index , is_calculated, closest_waypoint_index, first_run ? "true" : "false" ,is_avoiding ? "true" : "false" );
+            //RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, first_index %d,last_index %d,avoidence_start_index: %d, avoidence_end_index: %d , is_calculated: %d, closest_waypoint_index:%d,is_first_run %s, Is avoiding: %s" , start_index, end_index,first_index,last_index, avoidance_start_index,avoidance_end_index , is_calculated, closest_waypoint_index, first_run ? "true" : "false" ,is_avoiding ? "true" : "false" );
         
+            //print out sensitive waypoints
+            for (auto& waypoint : sensitive_waypoints)
+            {
+                RCLCPP_INFO(this->get_logger(), "Sensitive waypoint: %d", waypoint);
+            }
             
           
             if (objects_ != nullptr)
@@ -270,8 +278,9 @@ public:
             }
 
 
+
             
-             RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, closest_waypoint_index:%d,lookahead:%d,waypoints size:%d" , start_index, end_index, closest_waypoint_index,lookahead_distance_index,waypoints_size);
+             //RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, closest_waypoint_index:%d,lookahead:%d,waypoints size:%d" , start_index, end_index, closest_waypoint_index,lookahead_distance_index,waypoints_size);
         
 
             if (!is_calculated && !is_avoiding)
@@ -287,7 +296,8 @@ public:
 
             else if (is_calculated && !is_avoiding)
             {      
-                RCLCPP_INFO(this->get_logger(), "IS CALCULATED TRUE , IS AVOIDING FALSE first_index: %d, last_index: %d, start_index: %d, end_index: %d", first_index, last_index, start_index, end_index);
+                
+                //RCLCPP_INFO(this->get_logger(), "IS CALCULATED TRUE , IS AVOIDING FALSE first_index: %d, last_index: %d, start_index: %d, end_index: %d", first_index, last_index, start_index, end_index);
                 std::tie(start_index, end_index,avoidance_start_index,avoidance_end_index ) = get_start_end_index(first_index, last_index);
                 
                 if (start_index != -1 && end_index != -1)
@@ -323,23 +333,6 @@ public:
                 }
             }    
 
-                if (closest_waypoint_index == end_index)
-                {
-                    is_calculated = false;
-                    is_avoiding = false;
-                    first_index = -1;
-                    last_index = -1;
-                    start_index = -1;
-                    end_index = -1;
-                    is_trapezoid = false;
-                    actual_len_of_avoid = 0.0;
-                    first_run = true;
-                }
-
-           
-        
-
-            
 
             if (is_calculated && is_avoiding && start_index < end_index && closest_waypoint_index > end_index && closest_waypoint_index < lookahead_distance_index) 
             {
@@ -352,15 +345,17 @@ public:
                 last_index = -1;
                 start_index = -1;
                 end_index = -1;
+                avoidance_start_index = -1;
+                avoidance_end_index = -1;
                 is_trapezoid = false;
                 actual_len_of_avoid = 0.0;
                 first_run = true;
                 is_avoiding = false;
             }
 
-            if (is_calculated && is_avoiding && start_index > end_index && closest_waypoint_index - waypoints_size > end_index && closest_waypoint_index - waypoints_size < start_index && closest_waypoint_index > lookahead_distance_index)
+            else if (is_calculated && is_avoiding && start_index < end_index && closest_waypoint_index > end_index && closest_waypoint_index > lookahead_distance_index && end_index > lookahead_distance_index )
             {
-                RCLCPP_INFO(this->get_logger(), "Resetting variables,BBBBBBBBBBBBBB, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
+                RCLCPP_INFO(this->get_logger(), "Resetting variables,CCCCC, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
                 waypoint_frame_counts.clear();
                 sensitive_waypoints.clear();
                 // Reset variables
@@ -369,19 +364,39 @@ public:
                 last_index = -1;
                 start_index = -1;
                 end_index = -1;
+                avoidance_start_index = -1;
+                avoidance_end_index = -1;
                 is_trapezoid = false;
                 actual_len_of_avoid = 0.0;
                 first_run = true;
                 is_avoiding = false;
-            }
+            }    
 
-                
+            // else if (is_calculated && is_avoiding && start_index > end_index && closest_waypoint_index - waypoints_size > end_index && closest_waypoint_index - waypoints_size < start_index && closest_waypoint_index > lookahead_distance_index)
+            // {
+            //     RCLCPP_INFO(this->get_logger(), "Resetting variables,BBBBBBBBBBBBBB, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
+            //     waypoint_frame_counts.clear();
+            //     sensitive_waypoints.clear();
+            //     // Reset variables
+            //     is_calculated = false;
+            //     first_index = -1;
+            //     last_index = -1;
+            //     start_index = -1;
+            //     end_index = -1;
+            //     avoidance_start_index = -1;
+            //     avoidance_end_index = -1;
+            //     is_trapezoid = false;
+            //     actual_len_of_avoid = 0.0;
+            //     first_run = true;
+            //     is_avoiding = false;
+            // }
+    
                     
             // }                                           
                                                                                                                                     
             publishMarkers(waypoints_);
             // publishDebugMarkers(closest_waypoint_index, start_index, end_index, first_index, last_index, waypoints_,lookahead_distance_index);
-            // // RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, first_index %d,last_index %d,avoidence_start_index: %d, avoidence_end_index: %d , is_calculated: %d, closest_waypoint_index:%d,is_first_run %s, Is avoiding: %s" , start_index, end_index,first_index,last_index, avoidance_start_index,avoidance_end_index , is_calculated, closest_waypoint_index, first_run ? "true" : "false" ,is_avoiding ? "true" : "false" );
+            // RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, first_index %d,last_index %d,avoidence_start_index: %d, avoidence_end_index: %d , is_calculated: %d, closest_waypoint_index:%d, lookahead_distance_index:%d, closest_waypoint_index - waypoints_size:%d, is_first_run %s, Is avoiding: %s" , start_index, end_index,first_index,last_index, avoidance_start_index,avoidance_end_index , is_calculated, closest_waypoint_index,lookahead_distance_index,closest_waypoint_index - waypoints_size, first_run ? "true" : "false" ,is_avoiding ? "true" : "false" );
             
 
                 
@@ -620,10 +635,19 @@ public:
 
         for (int i = start_index; i <= end_index; ++i)
         {
+
+             
+
             if (i >= waypoints_size)
             {
                 i = 0;
             }
+
+            //print out the i value
+            RCLCPP_INFO(this->get_logger(), "i: %d", i);
+
+
+
             double x1 = waypoints_->poses[i].position.x;
             double y1 = waypoints_->poses[i].position.y;
             double x2, y2;
