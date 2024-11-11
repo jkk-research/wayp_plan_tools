@@ -110,7 +110,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->declare_parameter("pose_topic", "rotated_pose"); //default
         this->declare_parameter("obstacle_topic", "clustered_marker"); //default
         this->declare_parameter("lidar_frame", "lexus3/os_center_a_laser_data_frame"); //default
-        this->declare_parameter<bool>("odometry_topic", true); //default
+        
         
 
         this->get_parameter("detour_length_", detour_length_);
@@ -126,7 +126,6 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->get_parameter("pose_topic", pose_topic);
         this->get_parameter("obstacle_topic", obstacle_topic);
         this->get_parameter("lidar_frame", lidar_frame);
-        this->get_parameter("odometry_topic", odometry_topic);
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&ObstacleAvoidanceTrapezoid::parametersCallback, this, _1));
 
 
@@ -186,8 +185,8 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     bool is_trapezoid = false;
     bool first_run = true;
     bool is_avoiding = false;
-    bool odometry_topic = false; //default
-    bool new_lap;
+    
+    
     
     std::vector<int> closest_waypoint_index_m;
 
@@ -206,7 +205,6 @@ public:
 
     void timer_callback()
     {
-
         if (waypoints_ != nullptr && current_pose_ != nullptr) 
         {
             int closest_waypoint_index = find_closest_waypoint(current_pose_->pose.position.x, current_pose_->pose.position.y, *waypoints_);
@@ -220,11 +218,7 @@ public:
             publishDebugMarkers(closest_waypoint_index, start_index, end_index, first_index, last_index, waypoints_,lookahead_distance_index);
             //RCLCPP_INFO(this->get_logger(), "start_index: %d, end_index: %d, first_index %d,last_index %d,avoidence_start_index: %d, avoidence_end_index: %d , is_calculated: %d, closest_waypoint_index:%d,is_first_run %s, Is avoiding: %s" , start_index, end_index,first_index,last_index, avoidance_start_index,avoidance_end_index , is_calculated, closest_waypoint_index, first_run ? "true" : "false" ,is_avoiding ? "true" : "false" );
         
-            //print out sensitive waypoints
-            for (auto& waypoint : sensitive_waypoints)
-            {
-                RCLCPP_INFO(this->get_logger(), "Sensitive waypoint: %d", waypoint);
-            }
+           
             
           
             if (objects_ != nullptr)
@@ -334,11 +328,12 @@ public:
             }    
 
 
-            if (is_calculated && is_avoiding && start_index < end_index && closest_waypoint_index > end_index && closest_waypoint_index < lookahead_distance_index) 
+            if (is_calculated && is_avoiding &&  closest_waypoint_index > end_index && closest_waypoint_index < lookahead_distance_index) 
             {
                 RCLCPP_INFO(this->get_logger(), "Resetting variables,AAAAAAAAAAAAA, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
                 waypoint_frame_counts.clear();
                 sensitive_waypoints.clear();
+                points_out.clear(); // Clear points inside sensitive waypoints
                 // Reset variables
                 is_calculated = false;
                 first_index = -1;
@@ -353,11 +348,12 @@ public:
                 is_avoiding = false;
             }
 
-            else if (is_calculated && is_avoiding && start_index < end_index && closest_waypoint_index > end_index && closest_waypoint_index > lookahead_distance_index && end_index > lookahead_distance_index )
+            else if (is_calculated && is_avoiding &&  closest_waypoint_index > end_index && closest_waypoint_index > lookahead_distance_index && end_index > lookahead_distance_index )
             {
                 RCLCPP_INFO(this->get_logger(), "Resetting variables,CCCCC, closest_waypoint_index: %d, start_index: %d, end_index: %d", closest_waypoint_index, start_index, end_index);
                 waypoint_frame_counts.clear();
                 sensitive_waypoints.clear();
+                points_out.clear(); // Clear points inside sensitive waypoints
                 // Reset variables
                 is_calculated = false;
                 first_index = -1;
@@ -494,21 +490,17 @@ public:
     {
         int first_index = -1;
         int last_index  = -1;
-        
 
         waypoints_size = waypoints_->poses.size(); 
 
         std::unordered_set<int> waypoints_in_current_frame;
-        
-        
+
         for (const auto& point_out : points_out)
         {
-
             double point_x = point_out->point.x;
             double point_y = point_out->point.y;
-            
 
-           if   (closest_waypoint_index < lookahead_distance_index)
+            if (closest_waypoint_index < lookahead_distance_index)
             {
                 for (int i = closest_waypoint_index; i < lookahead_distance_index ; ++i)
                 {
@@ -522,41 +514,37 @@ public:
             }
             else if (closest_waypoint_index > lookahead_distance_index)
             {
-               
-               int l = lookahead_distance_index + waypoints_size;
+                int l = lookahead_distance_index + waypoints_size;
                 for (int i = closest_waypoint_index; i < l ; ++i)
-                 {
-                      double distance = std::sqrt(std::pow(waypoints_->poses[i - waypoints_size].position.x - point_x, 2) +
-                                                  std::pow(waypoints_->poses[i - waypoints_size].position.y - point_y, 2));
-                      if (distance < min_distance_treshold) 
-                      {
-                            waypoints_in_current_frame.insert(i % waypoints_size);
-                      }
-                 }
+                {
+                    double distance = std::sqrt(std::pow(waypoints_->poses[i - waypoints_size].position.x - point_x, 2) +
+                                                std::pow(waypoints_->poses[i - waypoints_size].position.y - point_y, 2));
+                    if (distance < min_distance_treshold) 
+                    {
+                        waypoints_in_current_frame.insert(i % waypoints_size);
+                    }
+                }
             }   
-
         }
-      
-        
+
         for (auto& waypoint : waypoints_in_current_frame) 
         {
             waypoint_frame_counts[waypoint]++;
-            
         }
 
-        for (const auto& waypoint : waypoint_frame_counts) 
+        if (!is_calculated && !is_avoiding) 
         {
-            //RCLCPP_INFO(this->get_logger(), "Waypoint index: %d, Count: %d", waypoint.first, waypoint.second);
-            if (waypoint.second > sensitivity) 
+            for (const auto& waypoint : waypoint_frame_counts) 
             {
-                if (std::find(sensitive_waypoints.begin(), sensitive_waypoints.end(), waypoint.first) == sensitive_waypoints.end()) 
+                if (waypoint.second > sensitivity) 
                 {
-                    sensitive_waypoints.push_back(waypoint.first);
+                    if (std::find(sensitive_waypoints.begin(), sensitive_waypoints.end(), waypoint.first) == sensitive_waypoints.end()) 
+                    {
+                        sensitive_waypoints.push_back(waypoint.first);
+                    }
                 }
             }
-
         }
-        
 
         if (sensitive_waypoints.size() > 0) 
         {
@@ -574,8 +562,8 @@ public:
 
             first_index = *sensitive_waypoints.begin();
         }
-        
-        return std::make_pair (first_index, last_index);
+
+        return std::make_pair(first_index, last_index);
     }       
 
     std::tuple<int, int,int,int> get_start_end_index(size_t first_index,size_t last_index)
@@ -630,14 +618,11 @@ public:
 
     void calculateTrapezoid(geometry_msgs::msg::PoseArray::SharedPtr waypoints_, int closest_waypoint_index, int start_index, int end_index, double detour_length_, double return_length_, double offset_distance_, std::string avoidance_direction, double distance_first_start, double distance_first_avoidance_end, double distance_first_avoidance_start, double distance_first_end) 
     {
-
         double avoid_length = avoid_detour_length + avoid_return_length;        
 
-        for (int i = start_index; i <= end_index; ++i)
+        int i = start_index;
+        while (true)
         {
-
-             
-
             if (i >= waypoints_size)
             {
                 i = 0;
@@ -646,14 +631,12 @@ public:
             //print out the i value
             RCLCPP_INFO(this->get_logger(), "i: %d", i);
 
-
-
             double x1 = waypoints_->poses[i].position.x;
             double y1 = waypoints_->poses[i].position.y;
             double x2, y2;
 
             // Calculate new waypoint positions and orientation
-            if (i < end_index) // Check if next waypoint exists
+            if (i < waypoints_size - 1) // Check if next waypoint exists
             {
                 x2 = waypoints_->poses[i+1].position.x;
                 y2 = waypoints_->poses[i+1].position.y;
@@ -663,9 +646,6 @@ public:
                 x2 = x1;
                 y2 = y1;
             }
-            
-
-            
 
             double orientation = compute_orientation(x1, y1, x2, y2);
             actual_len_of_avoid += line_length(x1, x2, y1, y2);
@@ -686,8 +666,6 @@ public:
                     new_x = x1 + distance * std::cos(orientation - M_PI / 2);
                     new_y = y1 + distance * std::sin(orientation - M_PI / 2);
                 }
-                
-
             }
             else if (actual_len_of_avoid > distance_first_start - distance_first_avoidance_start && actual_len_of_avoid < distance_first_start + distance_first_avoidance_end) 
             {
@@ -703,7 +681,6 @@ public:
                     new_x = x1 + distance * std::cos(orientation - M_PI / 2);
                     new_y = y1 + distance * std::sin(orientation - M_PI / 2);
                 }
-            
             }
             else if (actual_len_of_avoid > distance_first_start + distance_first_avoidance_end && actual_len_of_avoid < distance_first_start + distance_first_end) 
             {
@@ -729,24 +706,28 @@ public:
             waypoints_->poses[i].position.x = new_x;
             waypoints_->poses[i].position.y = new_y;
 
-            
-
-            for (int i = start_index; i < end_index; ++i)
-            //for (size_t i = 0; i < waypoints_->poses.size(); ++i)
+            if (i == end_index)
             {
-                double next_x = waypoints_->poses[i+1].position.x;
-                double next_y = waypoints_->poses[i+1].position.y;
-                double new_x = waypoints_->poses[i].position.x;
-                double new_y = waypoints_->poses[i].position.y;
-                double new_orientation = compute_orientation(new_x, new_y, next_x, next_y);
-
-                // Set the new orientation
-                double half_yaw = new_orientation * 0.5; ;
-                waypoints_->poses[i].orientation.w = std::cos(half_yaw);
-                waypoints_->poses[i].orientation.z = std::sin(half_yaw);
-                waypoints_->poses[i].orientation.x = 0.0;
-                waypoints_->poses[i].orientation.y = 0.0;
+                break;
             }
+
+            i++;
+        }
+
+        for (int i = start_index; i != end_index; i = (i + 1) % waypoints_size)
+        {
+            double next_x = waypoints_->poses[(i + 1) % waypoints_size].position.x;
+            double next_y = waypoints_->poses[(i + 1) % waypoints_size].position.y;
+            double new_x = waypoints_->poses[i].position.x;
+            double new_y = waypoints_->poses[i].position.y;
+            double new_orientation = compute_orientation(new_x, new_y, next_x, next_y);
+
+            // Set the new orientation
+            double half_yaw = new_orientation * 0.5;
+            waypoints_->poses[i].orientation.w = std::cos(half_yaw);
+            waypoints_->poses[i].orientation.z = std::sin(half_yaw);
+            waypoints_->poses[i].orientation.x = 0.0;
+            waypoints_->poses[i].orientation.y = 0.0;
         }
     }  
 
