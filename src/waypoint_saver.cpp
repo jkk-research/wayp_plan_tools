@@ -122,14 +122,14 @@ public:
             // Call on_timer function every 100 milliseconds
             timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&WaypointSaver::getTransform, this));
         }
-        sub_vehicle_speed_ = this->create_subscription<std_msgs::msg::Float32>("vehicle_speed_kmph", 10, std::bind(&WaypointSaver::vehicleSpeedCallback, this, _1));
+        sub_vehicle_speed_ = this->create_subscription<geometry_msgs::msg::Twist>("crio_Twist", 10, std::bind(&WaypointSaver::vehicleSpeedCallback, this, _1));
     }
 
 private:
 
-    void vehicleSpeedCallback(const std_msgs::msg::Float32 msg) 
+    void vehicleSpeedCallback(const geometry_msgs::msg::Twist msg) 
     {
-        speed_mps = msg.data / 3.6;
+        speed_mps = msg.linear.x;
         //RCLCPP_INFO_STREAM(this->get_logger(), "Speed: " << msg.data << " km/h");
     }
 
@@ -270,7 +270,7 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_pose_stamped_;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_pose_array_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom_;
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_vehicle_speed_;
+    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_vehicle_speed_;
     rclcpp::TimerBase::SharedPtr timer_{nullptr};
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
