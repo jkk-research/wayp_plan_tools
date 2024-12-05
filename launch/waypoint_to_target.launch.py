@@ -16,7 +16,7 @@ def generate_launch_description():
                 {"mps_alpha": 3.5},
                 {"mps_beta": 5.5}, 
                 {"waypoint_topic": "waypointarray"},
-                {"tf_frame_id": "base_link"},
+                {"tf_frame_id": "gamma1/base_link"},
                 {"tf_child_frame_id": "map"},                
             ],
         ),

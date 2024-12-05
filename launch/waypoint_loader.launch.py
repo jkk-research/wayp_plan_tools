@@ -16,9 +16,9 @@ def generate_launch_description():
             name='wayp_load',
             output='screen',
             parameters=[
-                {"file_dir": pkg_dir + "/csv"},
-                #{"file_dir": "/mnt/bag/waypoints/"},
-                {"file_name": "example01.csv"},
+                #{"file_dir": pkg_dir + "/csv"},
+                {"file_dir": "/home/dev/waypoints/"},
+                {"file_name": "saved_waypoints_mod.csv"},
                 {"per_waypoint_display": 5}, # display speed every 5th waypoint 
             ],
         )

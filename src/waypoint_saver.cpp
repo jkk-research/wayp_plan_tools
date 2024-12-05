@@ -76,7 +76,7 @@ public:
         this->declare_parameter<std::string>("pose_topic_type", "");
         this->declare_parameter<bool>("topic_based_saving", false);
         this->declare_parameter<std::string>("tf_frame_id", "map");
-        this->declare_parameter<std::string>("tf_child_frame_id", "base_link");
+        this->declare_parameter<std::string>("tf_child_frame_id", "gamma1/base_link");
         this->get_parameter("file_dir", file_dir);
         this->get_parameter("file_name", file_name);
         this->get_parameter("pose_topic", pose_topic);

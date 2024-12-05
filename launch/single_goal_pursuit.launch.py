@@ -11,7 +11,7 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 {"cmd_topic": "cmd_vel"},
-                {"wheelbase": 2.789},
+                {"wheelbase": 3.900},
                 {"waypoint_topic": "targetpoints"},
             ],
         )
