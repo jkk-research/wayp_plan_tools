@@ -15,7 +15,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
-#include "crio_ros2_msgs/msg/crio_message.hpp"
+
 
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
