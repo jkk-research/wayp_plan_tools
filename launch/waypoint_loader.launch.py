@@ -20,6 +20,7 @@ def generate_launch_description():
                 #{"file_dir": "/mnt/bag/waypoints/"},
                 {"file_name": "example01.csv"},
                 {"per_waypoint_display": 5}, # display speed every 5th waypoint 
+                {"trajectory_closed_loop_distance": 4.0}, # distance threshold beetwen first and last waypoint
             ],
         )
     ])

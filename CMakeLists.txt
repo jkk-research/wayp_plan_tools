@@ -70,8 +70,7 @@ add_executable(obstacle_avoidance_trapezoid src/obstacle_avoidance_trapezoid.cpp
 ament_target_dependencies(obstacle_avoidance_trapezoid  ${ament_dependencies} )
 add_executable(x_filter src/x_filter.cpp)
 ament_target_dependencies(x_filter ${ament_dependencies})
-add_executable(obstacle_avoidance_stopping src/obstacle_avoidance_stopping.cpp)
-ament_target_dependencies(obstacle_avoidance_stopping  ${ament_dependencies} )
+
 
 
 
@@ -102,6 +101,6 @@ install(TARGETS
   echo_metrics
   obstacle_avoidance_trapezoid
   x_filter
-  obstacle_avoidance_stopping
+  
   DESTINATION lib/${PROJECT_NAME})
 ament_package()

@@ -24,6 +24,7 @@
 #include <vector>
 #include <iomanip>
 #include <sstream>
+#include <cmath>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/bool.hpp"
@@ -61,6 +62,10 @@ class WaypointLoader : public rclcpp::Node
       {
         per_waypoint = param.as_int();
       }
+      if(param.get_name() == "trajectory_closed_loop_distance")
+      {
+        trajectory_closed_loop_distance = param.as_double();
+      }
     }
     return result;
   }
@@ -73,10 +78,12 @@ public:
     this->declare_parameter<std::string>("waypoint_topic", "");
     this->declare_parameter<std::string>("speed_marker_unit", "kmph");
     this->declare_parameter<int>("per_waypoint_display", per_waypoint); // // display speed text marker every Nth waypoint
+    this->declare_parameter<double>("trajectory_closed_loop_distance", trajectory_closed_loop_distance);
     this->get_parameter("file_dir", file_dir);
     this->get_parameter("file_name", file_name);
     this->get_parameter("speed_marker_unit", speed_marker_unit);
     this->get_parameter("per_waypoint_display", per_waypoint);
+    this->get_parameter("trajectory_closed_loop_distance", trajectory_closed_loop_distance);
     multi_file_path_.clear();
     /*
     if (file_name.empty())
@@ -92,6 +99,7 @@ public:
     lane_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("waypointarray", 1);
     speed_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("waypointarray_speeds", 1);
     mark_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("waypointarray_marker", 1);
+    trajectory_is_closed_ = this->create_publisher<std_msgs::msg::Bool>("trajectory_is_closed", 1);
     timer_ = this->create_wall_timer(500ms, std::bind(&WaypointLoader::timer_callback, this));
     sub_reinit_ = this->create_subscription<std_msgs::msg::Bool>("control_reinit", 10, std::bind(&WaypointLoader::reinitCallback, this, _1));
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&WaypointLoader::parametersCallback, this, std::placeholders::_1));
@@ -324,6 +332,21 @@ private:
     lane_pub_->publish(wp_array);
     speed_pub_->publish(speed_array);
     mark_pub_->publish(mark_array);
+
+    // Check if the trajectory is closed
+    if (!wps_c.empty())
+    {
+      const auto &first_wp = wps_c.front();
+      const auto &last_wp = wps_c.back();
+      double distance = std::sqrt(
+        std::pow(first_wp.position.x - last_wp.position.x, 2) +
+        std::pow(first_wp.position.y - last_wp.position.y, 2)        
+      );
+
+      std_msgs::msg::Bool is_closed_msg;
+      is_closed_msg.data = (distance < trajectory_closed_loop_distance);
+      trajectory_is_closed_->publish(is_closed_msg);
+    }
   }
 
   void reinitCallback(const std_msgs::msg::Bool &msg)
@@ -343,11 +366,13 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr lane_pub_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr speed_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr mark_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr trajectory_is_closed_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_reinit_;  
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
   std::vector<std::string> multi_file_path_;
   std::string file_dir, file_name, speed_marker_unit;
   double interval_ = 0.4;
+  double trajectory_closed_loop_distance = 4.0;
   bool topic_based_saving; // topic or transform (tf) based saving
   bool reinit = true;
   geometry_msgs::msg::PoseArray lane_array;
