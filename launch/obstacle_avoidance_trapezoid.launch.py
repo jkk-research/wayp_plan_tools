@@ -19,13 +19,14 @@ def generate_launch_description():
                 {"avoidance_direction": "left"},        #elkerules iranya
                 {"lookahead_distance_": 50},            #az eloretekintes hossza (m)
                 {"min_distance_treshold": 2.0},         #Az akadaly és a waypont kozotti tavolsag, amely alatt az akadalyt figyelembe vesszuk (m) 
-                {"sensitivity": 4.0},                   #az akadaly erzekenysege, ennyi elofordulas kell a figyelembe vetelhez minimum (db)
-                {"waypoint_topic":"sim1/waypointarray"},     #a waypointokat tartalmazo topik
-                {"pose_topic":"gamma/current_pose"},          #Az auto poziciojat tartalmazo topik
+                {"sensitivity": 5.0},                   #az akadaly erzekenysege, ennyi elofordulas kell a figyelembe vetelhez minimum (db)
+                {"waypoint_topic":"waypointarray"},     #a waypointokat tartalmazo topik
+                {"pose_topic":"/gamma1/gps/duro/hea/current_pose"},          #Az auto poziciojat tartalmazo topik
                 {"obstacle_topic":"clustered_marker"},  #Az akadalyokat tartalmazo topik, marker array
-                {"lidar_frame":"gamma/ouster_link/ouster"}, #melyik lidar frame-et hasznaljuk az akadalyok detektalasahoz
+                {"lidar_frame":"gamma1/TMF"},            #melyik lidar frame-et hasznaljuk az akadalyok detektalasahoz
                 {"stopping_distance_from_obstacle": 2.0}, #mennyi legyen a megallasi tavolsag az akadalytol (m)
-                {"is_stopping": False},                  #megalljon-e az auto az akadaly elott , false eseten csak elkerul
+                {"is_stopping": True},                  #megalljon-e az auto az akadaly elott , false eseten csak elkerul
+                {"speed_topic": "waypointarray_speeds"} #a waypointokhoz tartozo sebessegeket tartalmazo topik
                   
             ],
         ),

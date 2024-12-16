@@ -94,7 +94,10 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
             {
                 stopping_ = param.as_bool();
             }
-          
+            else if (param.get_name() == "speed_topic")
+            {
+                speed_topic = param.as_string();
+            }
             
             
                         
@@ -122,6 +125,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->declare_parameter("lidar_frame", "lexus3/os_center_a_laser_data_frame"); //default
         this->declare_parameter("stopping_distance_from_obstacle", 3.0); //default
         this->declare_parameter("is_stopping", true); //default
+        this->declare_parameter("speed_topic", "waypointarray_speeds"); //default
         
         
 
@@ -140,6 +144,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->get_parameter("lidar_frame", lidar_frame);
         this->get_parameter("stopping_distance_from_obstacle", stopping_distance_from_obstacle);
         this->get_parameter("is_stopping", stopping_);
+        this->get_parameter("speed_topic", speed_topic);
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&ObstacleAvoidanceTrapezoid::parametersCallback, this, _1));
 
 
@@ -149,7 +154,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         lane_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic,10 ,std::bind(&ObstacleAvoidanceTrapezoid::lane_callback,this, std::placeholders::_1));
        
         current_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(pose_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::current_pose_callback, this, std::placeholders::_1));
-        speed_sub = this->create_subscription<std_msgs::msg::Float32MultiArray>("sim1/waypointarray_speeds", 10, std::bind(&ObstacleAvoidanceTrapezoid::speed_callback, this, std::placeholders::_1));
+        speed_sub = this->create_subscription<std_msgs::msg::Float32MultiArray>(speed_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::speed_callback, this, std::placeholders::_1));
         marker_array_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(obstacle_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::marker_array_callback, this, std::placeholders::_1));
         marker_pub = this->create_publisher<visualization_msgs::msg::MarkerArray>("obstacle_avoidance_waypoint_markers", 10);
         pose_array_pub = this->create_publisher<geometry_msgs::msg::PoseArray>("obstacle_avoidance_pose_array_topic", 10);
@@ -159,7 +164,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     }
     private:
 
-    std::string waypoint_topic, pose_topic, obstacle_topic, lidar_frame;
+    std::string waypoint_topic, pose_topic, obstacle_topic, lidar_frame,speed_topic;
     geometry_msgs::msg::PoseStamped::SharedPtr current_pose_;
     geometry_msgs::msg::PoseArray::SharedPtr waypoints_;
     geometry_msgs::msg::PoseArray::SharedPtr modified_waypoints;
