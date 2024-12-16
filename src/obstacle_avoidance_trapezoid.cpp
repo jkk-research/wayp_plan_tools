@@ -10,7 +10,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <std_msgs/msg/float32_multi_array.hpp>
-
+#include <std_msgs/msg/bool.hpp>
 
 
 
@@ -156,6 +156,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         current_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(pose_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::current_pose_callback, this, std::placeholders::_1));
         speed_sub = this->create_subscription<std_msgs::msg::Float32MultiArray>(speed_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::speed_callback, this, std::placeholders::_1));
         marker_array_sub_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(obstacle_topic, 10, std::bind(&ObstacleAvoidanceTrapezoid::marker_array_callback, this, std::placeholders::_1));
+        trajectory_is_closed_sub_ = this->create_subscription<std_msgs::msg::Bool>("trajectory_is_closed", 10, std::bind(&ObstacleAvoidanceTrapezoid::trajectory_is_closed_callback, this, std::placeholders::_1));
         marker_pub = this->create_publisher<visualization_msgs::msg::MarkerArray>("obstacle_avoidance_waypoint_markers", 10);
         pose_array_pub = this->create_publisher<geometry_msgs::msg::PoseArray>("obstacle_avoidance_pose_array_topic", 10);
         debug_marker_pub = this->create_publisher<visualization_msgs::msg::MarkerArray>("debug_markers", 10);
@@ -211,7 +212,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     bool is_avoiding = false;
     bool stopping_ = true;
     bool first_stop = true;
-
+    bool is_closed_ = false;
     
     
     
@@ -237,8 +238,12 @@ public:
             int closest_waypoint_index = find_closest_waypoint(current_pose_->pose.position.x, current_pose_->pose.position.y, *waypoints_);
 
             int lookahead_distance_index = closest_waypoint_index + lookahead_distance_;
-            lookahead_distance_index = lookahead_distance_index % waypoints_size;
-
+             if (!is_closed_ && lookahead_distance_index >= waypoints_size) {
+                lookahead_distance_index = waypoints_size - 1;
+            } else {
+                lookahead_distance_index = lookahead_distance_index % waypoints_size;
+            }
+            
         
 
             //publishMarkers(waypoints_);
@@ -489,6 +494,11 @@ public:
         
     }
 
+    void trajectory_is_closed_callback(const std_msgs::msg::Bool::SharedPtr msg)
+    {
+        is_closed_ = msg->data;
+    }
+
     //create a callback function for the speed
      void speed_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
     {
@@ -575,7 +585,7 @@ public:
             return yaw;
         }
     
-    void calculateStopping(int stopping_waypoint, int deceleration_start_index, int first_index, const std_msgs::msg::Float32MultiArray::SharedPtr speed_)
+    void calculateStopping(int stopping_waypoint, int deceleration_start_index, int last_index, const std_msgs::msg::Float32MultiArray::SharedPtr speed_)
     {
         speed_->data[stopping_waypoint] = 0.0;
 
@@ -601,6 +611,7 @@ public:
 
         double current_speed = speed_->data[deceleration_start_index];
         double deceleration = std::pow(current_speed, 2) / (2 * distance_to_stop);
+       
 
         if (deceleration_start_index < stopping_waypoint)
         {
@@ -629,7 +640,7 @@ public:
         }
 
         // From stopping waypoint to first index make speed 0
-        if (stopping_waypoint < first_index)
+        if (stopping_waypoint < last_index)
         {
             for (int i = stopping_waypoint; i < first_index; ++i)
             {
@@ -642,7 +653,7 @@ public:
             {
                 speed_->data[i] = 0.0;
             }
-            for (int i = 0; i < first_index; ++i)
+            for (int i = 0; i < last_index; ++i)
             {
                 speed_->data[i] = 0.0;
             }
@@ -903,49 +914,69 @@ public:
     }  
 
           
-    void publishMarkers( geometry_msgs::msg::PoseArray::SharedPtr waypoints_, const std_msgs::msg::Float32MultiArray::SharedPtr speed_)
+    void publishMarkers(geometry_msgs::msg::PoseArray::SharedPtr waypoints_, const std_msgs::msg::Float32MultiArray::SharedPtr speed_)
     {       
-            geometry_msgs::msg::PoseArray::SharedPtr previous_waypoints_;
+        geometry_msgs::msg::PoseArray::SharedPtr previous_waypoints_;
 
-            
-            
-            if (previous_waypoints_ == nullptr || waypoints_->poses != previous_waypoints_->poses)
+        if (previous_waypoints_ == nullptr || waypoints_->poses != previous_waypoints_->poses)
+        {
+            //RCLCPP_INFO(this->get_logger(), "Publishing markers");
+            previous_waypoints_ = waypoints_;
+
+            auto marker_array = std::make_shared<visualization_msgs::msg::MarkerArray>();
+            auto pose_array = std::make_shared<geometry_msgs::msg::PoseArray>();
+            if (waypoints_ != nullptr) 
             {
-                //RCLCPP_INFO(this->get_logger(), "Publishing markers");
-                previous_waypoints_ = waypoints_;
-
-                auto marker_array = std::make_shared<visualization_msgs::msg::MarkerArray>();
-                auto pose_array = std::make_shared<geometry_msgs::msg::PoseArray>();
-                if (waypoints_ != nullptr) 
+                pose_array->header.frame_id = "map";
+                pose_array->header.stamp = this->now();
+                // Iterate over the waypoints
+                for (size_t i = 0; i < waypoints_->poses.size(); ++i) 
                 {
+                    // Create a Marker for the current waypoint
+                    visualization_msgs::msg::Marker marker;
+                    marker.header.frame_id = "map";
+                    marker.header.stamp = this->now();
+                    marker.ns = "waypoints";
+                    marker.id = i;
+                    marker.type = visualization_msgs::msg::Marker::ARROW;
+                    marker.action = visualization_msgs::msg::Marker::ADD;
+                    marker.pose = waypoints_->poses[i];                        
+                    marker.scale.x = 0.35;
+                    marker.scale.y = 0.35;
+                    marker.scale.z = 0.35;
+                    marker.color.a = 1.0;
 
-                    pose_array->header.frame_id = "map";
-                    pose_array->header.stamp = this->now();
-                    // Iterate over the waypoints
-                    for (size_t i = 0; i < waypoints_->poses.size(); ++i) 
+                    // Set color to red for waypoints between stopping_waypoint and deceleration_start_index
+                    if ((deceleration_start_index < stopping_waypoint && i >= deceleration_start_index && i <= stopping_waypoint) ||
+                        (deceleration_start_index > stopping_waypoint && (i >= deceleration_start_index || i <= stopping_waypoint)))
                     {
-                        // Create a Marker for the current waypoint
-                        visualization_msgs::msg::Marker marker;
-                        marker.header.frame_id = "map";
-                        marker.header.stamp = this->now();
-                        marker.ns = "waypoints";
-                        marker.id = i;
-                        marker.type = visualization_msgs::msg::Marker::ARROW;
-                        marker.action = visualization_msgs::msg::Marker::ADD;
-                        marker.pose = waypoints_->poses[i];                        
-                        marker.scale.x = 0.35;
-                        marker.scale.y = 0.35;
-                        marker.scale.z = 0.35;
-                        marker.color.a = 1.0;
+                        marker.color.r = 1.0;
+                        marker.color.g = 0.0;
+                        marker.color.b = 0.0;
+                    }
+                    // Set color to yellow for waypoints between stopping_waypoint and first_index
+                    else if ((stopping_waypoint < first_index && i >= stopping_waypoint && i <= first_index) ||
+                             (stopping_waypoint > first_index && (i >= stopping_waypoint || i <= first_index)))
+                    {
+                        marker.color.r = 1.0;
+                        marker.color.g = 1.0;
+                        marker.color.b = 0.0;
+                    }
+                    else
+                    {
                         marker.color.r = 0.0;
                         marker.color.g = 1.0;
                         marker.color.b = 0.0;
+                    }
+                
                     
-                        
-                        // Add the Marker to the MarkerArray
-                        marker_array->markers.push_back(marker);
-                        pose_array->poses.push_back(waypoints_->poses[i]);
+                    // Add the Marker to the MarkerArray
+                    marker_array->markers.push_back(marker);
+                    pose_array->poses.push_back(waypoints_->poses[i]);
 
+                    // Add speed marker text every 5 waypoints, at deceleration_start_index, and at stopping_waypoint
+                    if (i % 5 == 0 || i == deceleration_start_index || i == stopping_waypoint)
+                    {
                         visualization_msgs::msg::Marker speed_marker;
                         speed_marker.header.frame_id = "map";
                         speed_marker.header.stamp = this->now();
@@ -965,15 +996,16 @@ public:
                         // Add the speed Marker to the MarkerArray
                         marker_array->markers.push_back(speed_marker);
                     }
-
                 }
-                // Publish the MarkerArray
-                marker_pub->publish(*marker_array);
-                pose_array_pub->publish(*pose_array);
 
             }
+            // Publish the MarkerArray
+            marker_pub->publish(*marker_array);
+            pose_array_pub->publish(*pose_array);
 
-            
+        }
+
+        
     }
 
     void publishDebugMarkers (size_t closest_waypoint_index, size_t start_index, size_t end_index ,size_t first_index,size_t last_index, geometry_msgs::msg::PoseArray::SharedPtr waypoints_,int lookahead_distance_index, int stopping_waypoint, int deceleration_start_index)
@@ -1027,7 +1059,7 @@ public:
                 lookahead_marker.scale.z = 1.1;
                 debug_marker_array->markers.push_back(lookahead_marker);
 
-                if (start_index != -1 && end_index != -1 ) 
+                if (start_index != -1 && end_index != -1 && !stopping_ ) 
                 {
                     // Create a Marker for the start waypoint
                     visualization_msgs::msg::Marker start_marker;
@@ -1115,9 +1147,9 @@ public:
                     stopping_marker.type = visualization_msgs::msg::Marker::ARROW;
                     stopping_marker.action = visualization_msgs::msg::Marker::ADD;
                     stopping_marker.pose = waypoints_->poses[stopping_waypoint];
-                    stopping_marker.color.r = 1.0;
-                    stopping_marker.color.g = 1.0;
-                    stopping_marker.color.b = 1.0;
+                    stopping_marker.color.r = 0.0;
+                    stopping_marker.color.g = 0.0;
+                    stopping_marker.color.b = 0.0;
                     stopping_marker.color.a = 1.0;
                     stopping_marker.scale.x = 1.5;
                     stopping_marker.scale.y = 1.1;
@@ -1144,7 +1176,7 @@ public:
                     deceleration_start_marker.scale.z = 1.1;
                     debug_marker_array->markers.push_back(deceleration_start_marker);
                 }
-                if (avoidance_end_index != -1 && avoidance_start_index != -1)
+                if (avoidance_end_index != -1 && avoidance_start_index != -1 && !stopping_)
                 {
                     // Create a Marker for the avoidance start waypoint
                     visualization_msgs::msg::Marker avoidance_start_marker;
@@ -1226,6 +1258,7 @@ public:
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr current_pose_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr marker_array_sub_;
     rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr speed_sub;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr trajectory_is_closed_sub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub;
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_marker_pub;
