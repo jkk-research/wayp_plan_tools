@@ -24,9 +24,10 @@ def generate_launch_description():
                 {"pose_topic":"/gamma1/gps/duro/hea/current_pose"},          #Az auto poziciojat tartalmazo topik
                 {"obstacle_topic":"clustered_marker"},  #Az akadalyokat tartalmazo topik, marker array
                 {"lidar_frame":"gamma1/TMF"},            #melyik lidar frame-et hasznaljuk az akadalyok detektalasahoz
-                {"stopping_distance_from_obstacle": 2.0}, #mennyi legyen a megallasi tavolsag az akadalytol (m)
+                {"stopping_distance_from_obstacle": 24.0}, #mennyi legyen a megallasi tavolsag az akadalytol (m)
                 {"is_stopping": True},                  #megalljon-e az auto az akadaly elott , false eseten csak elkerul
-                {"speed_topic": "waypointarray_speeds"} #a waypointokhoz tartozo sebessegeket tartalmazo topik
+                {"speed_topic": "waypointarray_speeds"}, #a waypointokhoz tartozo sebessegeket tartalmazo topik
+                {"is_manual_brakeing": False},          #manualis fekezes?
                   
             ],
         ),

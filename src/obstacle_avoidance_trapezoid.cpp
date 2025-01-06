@@ -98,6 +98,15 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
             {
                 speed_topic = param.as_string();
             }
+            else if (param.get_name() == "is_manual_brakeing")
+            {
+                is_manual_brakeing = param.as_bool();
+            }
+            else
+            {
+                result.successful = false;
+                result.reason = "Invalid parameter";
+            }
             
             
                         
@@ -126,7 +135,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->declare_parameter("stopping_distance_from_obstacle", 3.0); //default
         this->declare_parameter("is_stopping", true); //default
         this->declare_parameter("speed_topic", "waypointarray_speeds"); //default
-        
+        this->declare_parameter("is_manual_brakeing", false); //default
         
 
         this->get_parameter("detour_length_", detour_length_);
@@ -145,6 +154,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         this->get_parameter("stopping_distance_from_obstacle", stopping_distance_from_obstacle);
         this->get_parameter("is_stopping", stopping_);
         this->get_parameter("speed_topic", speed_topic);
+        this->get_parameter("is_manual_brakeing", is_manual_brakeing);
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&ObstacleAvoidanceTrapezoid::parametersCallback, this, _1));
 
 
@@ -161,6 +171,7 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
         pose_array_pub = this->create_publisher<geometry_msgs::msg::PoseArray>("obstacle_avoidance_pose_array_topic", 10);
         debug_marker_pub = this->create_publisher<visualization_msgs::msg::MarkerArray>("debug_markers", 10);
         speed_pub = this->create_publisher<std_msgs::msg::Float32MultiArray>("obstacle_avoidance_speeds", 10);
+        aut_sys_publisher = this->create_publisher<std_msgs::msg::Bool>("aut_sys", 10);
         timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&ObstacleAvoidanceTrapezoid::timer_callback, this));
     }
     private:
@@ -213,9 +224,8 @@ class ObstacleAvoidanceTrapezoid : public rclcpp::Node
     bool stopping_ = true;
     bool first_stop = true;
     bool is_closed_ = false;
-    
-    
-    
+    bool is_manual_brakeing = false;
+        
     std::vector<int> closest_waypoint_index_m;
 
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -462,7 +472,26 @@ public:
                 deceleration_start_index = -1;
             }   
 
-       
+            else if (stopping_ && !first_stop && closest_waypoint_index >= deceleration_start_index && closest_waypoint_index <= first_index)
+            {
+                if (!is_manual_brakeing)
+                {
+                    // Publish false to aut_sys topic when between deceleration_start_index and stopping_waypoint
+                    auto aut_sys_msg = std::make_shared<std_msgs::msg::Bool>();
+                    aut_sys_msg->data = false;
+                    aut_sys_publisher->publish(*aut_sys_msg);
+                }
+            }
+            else if (stopping_)
+            {
+                if (!is_manual_brakeing)
+                {
+                    // Publish true to aut_sys topic when stopping
+                    auto aut_sys_msg = std::make_shared<std_msgs::msg::Bool>();
+                    aut_sys_msg->data = true;
+                    aut_sys_publisher->publish(*aut_sys_msg);
+                }
+            }
                     
             // }                                           
                                                                                                                                     
@@ -657,6 +686,14 @@ public:
             {
                 speed_->data[i] = 0.0;
             }
+        }
+
+        if (!is_manual_brakeing)
+        {
+            // Publish true to aut_sys topic when stopping
+            auto aut_sys_msg = std::make_shared<std_msgs::msg::Bool>();
+            aut_sys_msg->data = true;
+            aut_sys_publisher->publish(*aut_sys_msg);
         }
     }
 
@@ -1263,6 +1300,7 @@ public:
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr debug_marker_pub;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr speed_pub;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr aut_sys_publisher;
     OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 
 };
