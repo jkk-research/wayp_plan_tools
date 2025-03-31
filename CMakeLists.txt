@@ -72,6 +72,8 @@ add_executable(x_filter src/x_filter.cpp)
 ament_target_dependencies(x_filter ${ament_dependencies})
 add_executable(obstacle_avoidance_stopping src/obstacle_avoidance_stopping.cpp)
 ament_target_dependencies(obstacle_avoidance_stopping  ${ament_dependencies} )
+add_executable(current_pose src/current_pose_from_tf.cpp)
+ament_target_dependencies(current_pose  ${ament_dependencies} )
 
 
 
@@ -103,5 +105,6 @@ install(TARGETS
   obstacle_avoidance_trapezoid
   x_filter
   obstacle_avoidance_stopping
+  current_pose
   DESTINATION lib/${PROJECT_NAME})
 ament_package()
