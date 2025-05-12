@@ -73,14 +73,15 @@ public:
   }
 
 private:
-  // pure pursuit steering angle calc
-  float calcPursuitAngle(float goal_x, float goal_y) const
-  {
-    float alpha = atan2(goal_y, goal_x);
-    float lookahead_distance = sqrt(pow(goal_x, 2) + pow(goal_y, 2));
-    float steering_angle = atan2(2.0 * wheelbase * sin(alpha), lookahead_distance);
-    return steering_angle;
-  }
+  // pure pursuit angle calc
+  float calcPursuitOmega(float goal_x, float goal_y) const
+{
+  float lookahead_distance = sqrt(goal_x * goal_x + goal_y * goal_y);
+  float alpha = atan2(goal_y, goal_x);
+  float curvature = 2 * sin(alpha) / lookahead_distance;
+  return pursuit_vel.linear.x * curvature;
+}
+
 
   void speedCallback(const std_msgs::msg::Float32 &msg) const
   {
@@ -89,7 +90,7 @@ private:
 
   void waypointCallback(const geometry_msgs::msg::PoseArray &msg) const
   {
-    pursuit_vel.angular.z = calcPursuitAngle(msg.poses[0].position.x, msg.poses[0].position.y);
+    pursuit_vel.angular.z = calcPursuitOmega(msg.poses[0].position.x, msg.poses[0].position.y);
   }
   void timerLoop()
   {

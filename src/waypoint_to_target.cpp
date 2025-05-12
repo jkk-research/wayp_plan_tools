@@ -242,7 +242,7 @@ private:
         // loop closure is true, when the first and last waypoint are closer than 4.0 meters
         if (distanceFromWayPoint(msg.poses[first_wp], msg.poses[last_wp]) < 4.0)
         {
-            traj_closed_loop = true;
+            traj_closed_loop = false;
         }
         else
         {
