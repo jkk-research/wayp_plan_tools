@@ -34,7 +34,7 @@ def generate_launch_description():
             parameters=[
                 #{"file_dir": "/mnt/c/waypoints"},
                 {"file_dir": pkg_dir + "/csv"},
-                {"file_name": "example01.csv"},
+                {"file_name": "BingMobilisCenter.csv"},
                 {"per_waypoint_display": 10}, # display speed every 10th waypoint 
             ],
         ),
@@ -43,11 +43,11 @@ def generate_launch_description():
         Node(
             package='wayp_plan_tools',
             executable='single_goal_pursuit',
-            name='pure_pursuit',
+            name='single_goal_pursuit',
             output='screen',
             parameters=[
                 {"cmd_topic": "cmd_vel"},
-                {"wheelbase": 2.789},
+                {"wheelbase": 1.3},
             ],
         ),
     ])

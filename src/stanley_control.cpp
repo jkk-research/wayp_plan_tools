@@ -71,7 +71,7 @@ public:
     descriptor_slider.description = "Slider parameter";
     range.set__from_value(-0.1).set__to_value(1.6);
     descriptor_slider.floating_point_range = {range};
-    this->declare_parameter<std::string>("waypoint_topic", "");
+    this->declare_parameter<std::string>("waypoint_topic", "waypointarray");
     this->declare_parameter<std::string>("cmd_topic", cmd_topic);
     this->declare_parameter<float>("wheelbase", wheelbase);
     this->declare_parameter<float>("heading_err_gain", heading_err_gain, descriptor_slider);

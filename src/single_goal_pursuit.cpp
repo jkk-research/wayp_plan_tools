@@ -53,7 +53,7 @@ public:
   SingleGoalPursuit() : Node("pure_pursuit_node")
   {
     RCLCPP_INFO_STREAM(this->get_logger(), "pure_pursuit_node started: ");
-    this->declare_parameter<std::string>("waypoint_topic", "");
+    this->declare_parameter<std::string>("waypoint_topic", "waypointarray");
     this->declare_parameter<std::string>("cmd_topic", cmd_topic);
     this->declare_parameter<float>("wheelbase", wheelbase);
     this->get_parameter("waypoint_topic", waypoint_topic);
@@ -62,7 +62,7 @@ public:
 
     goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_topic, 10);
     reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("control_reinit", 10);
-    sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>(waypoint_topic, 10, std::bind(&SingleGoalPursuit::waypointCallback, this, _1));
+    sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>("/targetpoints", 10, std::bind(&SingleGoalPursuit::waypointCallback, this, _1));
     sub_s_ = this->create_subscription<std_msgs::msg::Float32>("pursuitspeedtarget", 10, std::bind(&SingleGoalPursuit::speedCallback, this, _1));
     timer_ = this->create_wall_timer(50ms, std::bind(&SingleGoalPursuit::timerLoop, this));
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&SingleGoalPursuit::parametersCallback, this, std::placeholders::_1));
