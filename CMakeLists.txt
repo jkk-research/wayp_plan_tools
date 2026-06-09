@@ -5,7 +5,7 @@ project(wayp_plan_tools)
 set(CMAKE_CXX_STANDARD 17)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic -Ofast)
 endif()
 
 # find dependencies
@@ -20,6 +20,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -30,11 +31,12 @@ set(ament_dependencies
   std_msgs
   geometry_msgs
   nav_msgs
+  sensor_msgs
   visualization_msgs
   tf2
   tf2_msgs
   tf2_ros
-  tf2_geometry_msgs  
+  tf2_geometry_msgs
 )
 
 include_directories(
@@ -59,6 +61,8 @@ add_executable(echo_metrics src/echo_metrics.cpp)
 ament_target_dependencies(echo_metrics  ${ament_dependencies} )
 add_executable(obstacle_avoidance_trapezoid src/obstacle_avoidance_trapezoid.cpp)
 ament_target_dependencies(obstacle_avoidance_trapezoid  ${ament_dependencies} )
+add_executable(elastic_band_avoidance src/elastic_band_avoidance.cpp)
+ament_target_dependencies(elastic_band_avoidance  ${ament_dependencies} )
 
 
 if(BUILD_TESTING)
@@ -87,5 +91,6 @@ install(TARGETS
   stanley_control
   echo_metrics
   obstacle_avoidance_trapezoid
+  elastic_band_avoidance
   DESTINATION lib/${PROJECT_NAME})
 ament_package()

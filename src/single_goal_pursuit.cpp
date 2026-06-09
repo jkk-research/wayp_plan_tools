@@ -60,7 +60,7 @@ public:
     this->get_parameter("cmd_topic", cmd_topic);
     this->get_parameter("wheelbase", wheelbase);
 
-    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_topic, 10);
+    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("ctrl_cmd", 10);
     reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("control_reinit", 10);
     sub_w_ = this->create_subscription<geometry_msgs::msg::PoseArray>("/targetpoints", 10, std::bind(&SingleGoalPursuit::waypointCallback, this, _1));
     sub_s_ = this->create_subscription<std_msgs::msg::Float32>("pursuitspeedtarget", 10, std::bind(&SingleGoalPursuit::speedCallback, this, _1));
@@ -87,13 +87,21 @@ private:
     pursuit_vel.linear.x = msg.data;
   }
 
-  void waypointCallback(const geometry_msgs::msg::PoseArray &msg) const
+  void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
   {
-    pursuit_vel.angular.z = calcPursuitAngle(msg.poses[0].position.x, msg.poses[0].position.y);
+    if (!msg.poses.empty())
+    {
+      stored_target_ = msg;
+      target_received_ = true;
+    }
   }
   void timerLoop()
   {
     // RCLCPP_INFO_STREAM(this->get_logger(), "timer");
+    if (target_received_)
+    {
+      pursuit_vel.angular.z = calcPursuitAngle(stored_target_.poses[0].position.x, stored_target_.poses[0].position.y);
+    }
     goal_pub_->publish(pursuit_vel);
   }
   void reinitControl()
@@ -112,6 +120,8 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   float wheelbase = 2.789; // meter
   std::string cmd_topic;
+  geometry_msgs::msg::PoseArray stored_target_;
+  bool target_received_ = false;
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 };
 

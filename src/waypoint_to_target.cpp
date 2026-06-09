@@ -185,6 +185,15 @@ private:
 
     void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
     {
+        stored_waypoints_ = msg;
+        waypoints_received_ = true;
+    }
+
+    void processWaypoints()
+    {
+        if (!waypoints_received_)
+            return;
+        const geometry_msgs::msg::PoseArray &msg = stored_waypoints_;
         target_pose_arr.poses.clear();
         pursuit_goal.header.frame_id = tf_frame_id;
         pursuit_goal.texture.header.frame_id = tf_frame_id;
@@ -323,6 +332,31 @@ private:
         metrics_arr.data[common_wpt::AVG_LAT_DISTANCE] = average_distance;
         metrics_arr.data[common_wpt::MAX_LAT_DISTANCE] = maximum_distance;
 
+        // update speed from stored speed array using the current closest waypoint (runs at 20Hz)
+        if (speeds_received_)
+        {
+            if (static_speed_enabled)
+            {
+                speed_msg.data = static_speed;
+            }
+            else
+            {
+                speed_msg.data = stored_speeds_.data[closest_waypoint];
+            }
+            // stop at the end of the path (if the trajectory is not a circular loop)
+            if (traj_closed_loop == false)
+            {
+                if (last_waypoint_reached == true)
+                {
+                    if ((last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 > 5.0)
+                    {
+                        speed_msg.data = 0.0;
+                        RCLCPP_INFO_STREAM(this->get_logger(), "STOP: last waypoint reached at more than 5s ago");
+                    }
+                }
+            }
+        }
+
         // calculate the adaptive lookahead distance
         double lookahead_actual = calcLookahead(speed_msg.data);
         metrics_arr.data[common_wpt::ACT_LOOK_DIST] = lookahead_actual;
@@ -451,28 +485,8 @@ private:
     }
     void speedCallback(const std_msgs::msg::Float32MultiArray &msg)
     {
-        // speed data from the target waypoint
-        if (static_speed_enabled)
-        {
-            speed_msg.data = static_speed;
-        }
-        else
-        {
-            speed_msg.data = msg.data[metrics_arr.data[common_wpt::CUR_WAYPOINT_ID]];
-        }
-        // RCLCPP_INFO_STREAM(this->get_logger(), "Target speed:" << speed_msg.data << " m/s");
-        // stop at the end of the path (if the trajectory is not a circular loop)
-        if (traj_closed_loop == false)
-        {
-            if (last_waypoint_reached == true)
-            {
-                if ((last_waypoint_reached_time - this->now()).nanoseconds() / -1e9 > 5.0)
-                {
-                    speed_msg.data = 0.0;
-                    RCLCPP_INFO_STREAM(this->get_logger(), "STOP: last waypoint reached at more than 5s ago");
-                }
-            }
-        }
+        stored_speeds_ = msg;
+        speeds_received_ = true;
     }
 
     // get tf2 transform from map to base_link
@@ -510,6 +524,7 @@ private:
     {
         // RCLCPP_INFO(this->get_logger(), "timer");
         getTransform();
+        processWaypoints();
         goal_pub_->publish(pursuit_vizu_arr);
         target_pub_->publish(target_pose_arr);
         speed_pub_->publish(speed_msg);
@@ -548,6 +563,10 @@ private:
     visualization_msgs::msg::Marker pursuit_goal, pursuit_closest, cross_track_marker;
     visualization_msgs::msg::MarkerArray pursuit_vizu_arr;
     geometry_msgs::msg::PoseArray target_pose_arr;
+    geometry_msgs::msg::PoseArray stored_waypoints_;
+    bool waypoints_received_ = false;
+    std_msgs::msg::Float32MultiArray stored_speeds_;
+    bool speeds_received_ = false;
     std::string tf_child_frame_id, tf_frame_id;
     std_msgs::msg::Float32 speed_msg;
 };

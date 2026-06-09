@@ -84,7 +84,7 @@ public:
     this->get_parameter("cross_track_err_gain", cross_track_err_gain);
     this->get_parameter("pursuit_gain", pursuit_gain);
 
-    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_topic, 10);
+    goal_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("ctrl_cmd", 10);
     reinit_pub_ = this->create_publisher<std_msgs::msg::Bool>("control_reinit", 10);
     deb_c_pub = this->create_publisher<std_msgs::msg::Float32>("debug_cross_track_err", 10);
     deb_h_pub = this->create_publisher<std_msgs::msg::Float32>("debug_heading_err", 10);

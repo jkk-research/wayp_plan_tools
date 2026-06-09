@@ -34,7 +34,7 @@ def generate_launch_description():
             parameters=[
                 #{"file_dir": "/mnt/c/waypoints"},
                 {"file_dir": pkg_dir + "/csv"},
-                {"file_name": "converted_pose_resampled_2.0m.csv"},
+                {"file_name": "EarthAUMOVIO.csv"},
                 {"per_waypoint_display": 10}, # display speed every 10th waypoint 
             ],
         ),
