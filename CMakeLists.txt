@@ -61,8 +61,8 @@ add_executable(echo_metrics src/echo_metrics.cpp)
 ament_target_dependencies(echo_metrics  ${ament_dependencies} )
 add_executable(obstacle_avoidance_trapezoid src/obstacle_avoidance_trapezoid.cpp)
 ament_target_dependencies(obstacle_avoidance_trapezoid  ${ament_dependencies} )
-add_executable(elastic_band_avoidance src/elastic_band_avoidance.cpp)
-ament_target_dependencies(elastic_band_avoidance  ${ament_dependencies} )
+add_executable(pointcloud_trajectory_avoidance src/pointcloud_trajectory_avoidance.cpp)
+ament_target_dependencies(pointcloud_trajectory_avoidance  ${ament_dependencies} )
 
 
 if(BUILD_TESTING)
@@ -77,6 +77,9 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+install(PROGRAMS
+  scripts/ptc_avoidance.py
+  DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY 
   launch
   csv
@@ -91,6 +94,6 @@ install(TARGETS
   stanley_control
   echo_metrics
   obstacle_avoidance_trapezoid
-  elastic_band_avoidance
+  pointcloud_trajectory_avoidance
   DESTINATION lib/${PROJECT_NAME})
 ament_package()
