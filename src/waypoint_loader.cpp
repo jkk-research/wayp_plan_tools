@@ -272,7 +272,7 @@ private:
     {
       wp_array.poses.push_back(*it);
       visualization_msgs::msg::Marker mark_elem;
-      mark_elem.header.frame_id = "/map";
+      mark_elem.header.frame_id = "odom";
       mark_elem.header.stamp = this->now();
       mark_elem.ns = "waypoints";
       mark_elem.id = id;
@@ -287,7 +287,7 @@ private:
       if (id % per_waypoint == 0)
       {
         visualization_msgs::msg::Marker text_elem;
-        text_elem.header.frame_id = "/map";
+        text_elem.header.frame_id = "odom";
         text_elem.header.stamp = this->now();
         text_elem.ns = "speed_kmph";
         text_elem.id = id;
