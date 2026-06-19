@@ -67,6 +67,22 @@ public:
             {
                 interpolate_waypoints = param.as_bool();
             }
+            if (param.get_name() == "stop_zone_enabled")
+            {
+                stop_zone_enabled = param.as_bool();
+            }
+            if (param.get_name() == "stop_zone_x")
+            {
+                stop_zone_x = param.as_double();
+            }
+            if (param.get_name() == "stop_zone_y")
+            {
+                stop_zone_y = param.as_double();
+            }
+            if (param.get_name() == "stop_zone_radius")
+            {
+                stop_zone_radius = param.as_double();
+            }
         }
         return result;
     }
@@ -99,6 +115,14 @@ public:
         this->get_parameter("tf_child_frame_id", tf_child_frame_id);
         this->declare_parameter<bool>("interpolate_waypoints", false);
         this->get_parameter("interpolate_waypoints", interpolate_waypoints);
+        this->declare_parameter<bool>("stop_zone_enabled", false);
+        this->get_parameter("stop_zone_enabled", stop_zone_enabled);
+        this->declare_parameter<double>("stop_zone_x", 0.0);
+        this->get_parameter("stop_zone_x", stop_zone_x);
+        this->declare_parameter<double>("stop_zone_y", 0.0);
+        this->get_parameter("stop_zone_y", stop_zone_y);
+        this->declare_parameter<double>("stop_zone_radius", 2.0);
+        this->get_parameter("stop_zone_radius", stop_zone_radius);
 
         if (waypoint_topic == "")
         {
@@ -355,6 +379,34 @@ private:
                     }
                 }
             }
+            // stop zone: send 0 m/s for stop_zone_duration seconds when close to the stop zone coordinates
+            if (stop_zone_enabled)
+            {
+                const double dist = sqrt(pow(current_pose.position.x - stop_zone_x, 2) +
+                                         pow(current_pose.position.y - stop_zone_y, 2));
+                const bool near_stop = dist <= stop_zone_radius;
+                if (near_stop && !in_stop_zone)
+                {
+                    in_stop_zone = true;
+                    stop_zone_entry_time = this->now();
+                    RCLCPP_INFO_STREAM(this->get_logger(), "Stop zone entered at ("
+                        << std::fixed << std::setprecision(1)
+                        << current_pose.position.x << ", " << current_pose.position.y
+                        << "), holding 0 m/s for " << stop_zone_duration << " s");
+                }
+                if (in_stop_zone)
+                {
+                    const double elapsed = (this->now() - stop_zone_entry_time).seconds();
+                    if (elapsed < stop_zone_duration)
+                    {
+                        speed_msg.data = 0.0;
+                    }
+                    else if (!near_stop)
+                    {
+                        in_stop_zone = false;
+                    }
+                }
+            }
         }
 
         // calculate the adaptive lookahead distance
@@ -560,6 +612,13 @@ private:
     bool traj_closed_loop = false; // Trajectory loop closure bool, if the trajectory is linear/open loop: false, if circular/cloded loop: true
     bool reinit = true, interpolate_waypoints = false;
     double static_speed; // value of static speed in m/s
+    bool stop_zone_enabled = false;
+    double stop_zone_x = 0.0;
+    double stop_zone_y = 0.0;
+    double stop_zone_radius = 2.0;
+    static constexpr double stop_zone_duration = 3.0; // seconds
+    bool in_stop_zone = false;
+    rclcpp::Time stop_zone_entry_time;
     visualization_msgs::msg::Marker pursuit_goal, pursuit_closest, cross_track_marker;
     visualization_msgs::msg::MarkerArray pursuit_vizu_arr;
     geometry_msgs::msg::PoseArray target_pose_arr;
