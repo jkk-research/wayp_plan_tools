@@ -1,6 +1,8 @@
 # `wayp_plan_tools` `ROS 2` package
 Waypoint and planner tools for `ROS 2` with minimal dependencies. [![Static Badge](https://img.shields.io/badge/ROS_2-Humble-34aec5)](https://docs.ros.org/en/humble/)
 
+Tutorial (simulation + controllers): [jkk-research.github.io/latest/workshops/control_sim](https://jkk-research.github.io/latest/workshops/control_sim/)
+
 Planner / control nodes:
 - `single_goal_pursuit`: Pure pursuit (for vehicles / robots), a simple cross-track error method
 - `multiple_goal_pursuit`: Multiple goal pursuit for vehicles / robots an implementation of our [paper](https://hjic.mk.uni-pannon.hu/index.php/hjic/article/view/914)
@@ -54,6 +56,26 @@ The "classic" pure pursuit implementation
 # `multiple_goal_pursuit` node 
 Multiple goal pursuit for vehicles / robots, an implementation of our [paper](https://hjic.mk.uni-pannon.hu/index.php/hjic/article/view/914)
 
+It extends pure pursuit from one goal point to several. The node reads the goal points from `waypoint_topic` (`PoseArray` in the vehicle frame, `base_link` = center of the rear axle). For each goal point $i$ it computes the pure pursuit steering angle $\delta_i = \arctan\frac{2 L \sin\alpha_i}{l_{d,i}}$. Here $L$ is the `wheelbase`, $\alpha_i$ is the angle of the goal point and $l_{d,i}$ is its distance. The steering command is the average of these angles, $\delta = \frac{1}{n}\sum_{i=1}^{n}\delta_i$. Several goal points at different distances smooth the steering: the near points correct the lateral error and the far points anticipate the curves. With one goal point the node is the same as `single_goal_pursuit`. The speed comes from `pursuitspeedtarget`. The output is published on `cmd_vel` (`linear.x` = speed, `angular.z` = steering angle [rad]).
+
+# `stanley_control` node
+Stanley lateral controller, implemented according to the original paper: S. Thrun et al., *Stanley: The Robot that Won the DARPA Grand Challenge*, Journal of Field Robotics 23(9), 2006, Section 9.2 ([pdf](https://robots.stanford.edu/papers/thrun.stanley05.pdf)).
+
+The steering law (Eq. 7 in the paper):
+
+$$\delta(t) = \psi(t) + \arctan\frac{k\,x(t)}{u(t)}$$
+
+- $\psi(t)$: heading error, the orientation of the nearest path segment relative to the vehicle's orientation
+- $x(t)$: cross-track error, the lateral distance of the **center of the front axle** from the nearest point of the path (signed, positive if the path is on the left)
+- $u(t)$: vehicle speed
+- $k$: gain, for small errors $x(t) \approx x(0)\,e^{-kt}$ (Eq. 9), so $k$ sets the convergence rate
+
+With zero cross-track error the front wheels are steered parallel to the path; with a large error the $\arctan$ term turns the wheels toward the path (at most $\pm 90°$).
+
+``` r
+ros2 launch wayp_plan_tools stanley_control.launch.py
+```
+
 # `follow_the_carrot` node
 Follow-the-carrot, the simplest controller
 ![](csv/control_follow_the_carrot01.svg)
@@ -73,7 +95,7 @@ It also provides a `/metrics_wayp` array topic with the following  elements:
 |`[5]` | target waypoint ID | `TRG_WAYPOINT_ID`
 |`[6]` | target waypoint longitudinal distance (similar to lookahed distance, but at a waypoint) | `TRG_WAY_LON_DIST`
 |`[7]` | actual lookahead distance | `ACT_LOOK_DIST`
-|`[8]` | current cross-track error | `CUR_CROSS_TRACK`
+|`[8]` | heading difference between the closest waypoint and the vehicle [rad] (despite its name, not a distance) | `CUR_CROSS_TRACK`
 
 
 <img src="csv/lookahead01.svg" width=60% />
@@ -96,6 +118,8 @@ ros2 run wayp_plan_tools waypoint_loader --ros-args -p file_name:=tmp1.csv -p fi
 # Usage with a simulator
 
 Please refer to [github.com/jkk-research/sim_wayp_plan_tools](https://github.com/jkk-research/sim_wayp_plan_tools).
+
+A step-by-step tutorial is available at [jkk-research.github.io/latest/workshops/control_sim](https://jkk-research.github.io/latest/workshops/control_sim/). It covers the Gazebo Fortress + ROS 2 Humble simulation, loading waypoints, `waypoint_to_target`, running the controllers (`single_goal_pursuit`, `multiple_goal_pursuit`, `stanley_control`, `follow_the_carrot`), tuning with `rqt_reconfigure` and visualization in RViz2.
 
 ![](https://raw.githubusercontent.com/jkk-research/sim_wayp_plan_tools/main/img/gz_rviz01.gif)
 

@@ -85,6 +85,12 @@ private:
   void waypointCallback(const geometry_msgs::msg::PoseArray &msg)
   {
     // determine the size of the array, the number of goal points
+    if (msg.poses.empty())
+    {
+      // no goal point: keep the previous steering angle (avoid division by zero / NaN command)
+      RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Empty goal point array on " << waypoint_topic);
+      return;
+    }
     goalpoint_count = msg.poses.size();
     float sum_angle = 0;
     for (int i = 0; i < goalpoint_count; i++)

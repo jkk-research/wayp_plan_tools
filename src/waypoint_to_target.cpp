@@ -315,7 +315,8 @@ private:
         tf2::Quaternion q_curr(current_pose.orientation.x, current_pose.orientation.y, current_pose.orientation.z, current_pose.orientation.w);
         tf2::Matrix3x3 m_curr(q_curr);
         double current_roll, current_pitch, current_yaw;
-        double cross_yaw_diff = closest_yaw - current_yaw;
+        m_curr.getRPY(current_roll, current_pitch, current_yaw);
+        double cross_yaw_diff = std::atan2(std::sin(closest_yaw - current_yaw), std::cos(closest_yaw - current_yaw));
 
         metrics_arr.data[common_wpt::CUR_LAT_DIST_ABS] = smallest_curr_distance;
         metrics_arr.data[common_wpt::CUR_WAYPOINT_ID] = closest_waypoint;
